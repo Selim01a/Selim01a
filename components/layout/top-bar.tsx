@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { usePortalStore } from "@/store/portal-store";
 
 export function TopBar() {
-  const { examFilter, setExamFilter, streak, profile } = usePortalStore();
+  const { examFilter, setExamFilter, streakDays, profile } = usePortalStore();
 
   return (
     <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
@@ -32,7 +32,7 @@ export function TopBar() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             className="pl-10"
-            placeholder="Konu, görev, deneme veya tekrar ara..."
+            placeholder="Konu, gorev, deneme veya tekrar ara..."
           />
         </div>
 
@@ -54,7 +54,7 @@ export function TopBar() {
 
           <Badge variant="outline" className="gap-2 px-3 py-1.5">
             <Flame className="h-3.5 w-3.5 text-amber-300" />
-            {streak} gun seri
+            {streakDays} gun seri
           </Badge>
 
           <button
@@ -65,7 +65,7 @@ export function TopBar() {
           </button>
 
           <Avatar>
-            <AvatarFallback>{profile.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{profile.avatarFallback}</AvatarFallback>
           </Avatar>
         </div>
       </div>

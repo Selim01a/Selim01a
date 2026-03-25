@@ -17,9 +17,9 @@ export function formatCompactNumber(value: number) {
   }).format(value);
 }
 
-export function getPriorityTone(priority: "Yuksek" | "Orta" | "Dusuk") {
-  if (priority === "Yuksek") return "bg-rose-500/10 text-rose-200";
-  if (priority === "Orta") return "bg-amber-500/10 text-amber-200";
+export function getPriorityTone(priority: "high" | "medium" | "low") {
+  if (priority === "high") return "bg-rose-500/10 text-rose-200";
+  if (priority === "medium") return "bg-amber-500/10 text-amber-200";
   return "bg-emerald-500/10 text-emerald-200";
 }
 

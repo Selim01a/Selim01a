@@ -17,7 +17,9 @@ type PortalState = {
   setExamFilter: (exam: ExamFilter) => void;
   toggleTask: (taskId: string) => void;
   addGoal: (goal: Omit<Goal, "id" | "status"> & { note?: string }) => void;
-  updateProfile: (profile: ProfileData) => void;
+  updateProfile: (
+    profile: Pick<ProfileData, "name" | "email" | "university" | "focusMode" | "dailyGoalHours" | "weeklyGoal">,
+  ) => void;
 };
 
 function deriveGoalStatus(progress: number): Goal["status"] {
@@ -62,5 +64,12 @@ export const usePortalStore = create<PortalState>((set) => ({
         ...state.goals,
       ],
     })),
-  updateProfile: (profile) => set({ profile, streakDays: profile.streakDays }),
+  updateProfile: (profile) =>
+    set((state) => ({
+      profile: {
+        ...state.profile,
+        ...profile,
+      },
+      streakDays: state.profile.streakDays,
+    })),
 }));

@@ -61,6 +61,7 @@ export type StudyArea = {
   successRate: number;
   summary: string;
   recommendation: string;
+  accent: string;
 };
 
 export type TopicReviewItem = {
@@ -155,16 +156,38 @@ export type PlannerSlot = {
   focus: string;
 };
 
+export type PlannerBoardData = {
+  daily: PlannerSlot[];
+  weeklySummary: Array<{ label: string; value: string }>;
+};
+
+export type TopicDistributionItem = {
+  name: string;
+  value: number;
+};
+
+export type RadarStat = {
+  subject: string;
+  hmgs: number;
+  yds: number;
+  kpss: number;
+};
+
 export type ProfileData = {
   name: string;
   email: string;
   university: string;
   targetExamWindow: string;
   dailyGoalHours: number;
-  focusMode: "Dengeli" | "HMGS Once" | "YDS Once" | "KPSS Once";
+  focusMode:
+    | "Dengeli"
+    | "HMGS Oncelikli"
+    | "YDS Oncelikli"
+    | "KPSS Oncelikli";
   notificationLevel: "Minimal" | "Standart" | "Yuksek";
   streakDays: number;
   avatarFallback: string;
+  weeklyGoal: string;
 };
 
 export type PortalData = {
@@ -184,11 +207,14 @@ export type PortalData = {
   hmgsTrials: MockExam[];
   ydsTrials: MockExam[];
   kpssTrials: MockExam[];
+  planner: PlannerBoardData;
   plannerSlots: PlannerSlot[];
   wrongReasons: WrongReason[];
   goals: Goal[];
   readingPerformance: ReadingPerformance[];
   wordReviews: WordReview[];
   topicTracking: TopicTrackingItem[];
+  topicDistribution: TopicDistributionItem[];
+  radarStats: RadarStat[];
   profile: ProfileData;
 };

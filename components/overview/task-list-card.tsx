@@ -8,8 +8,10 @@ import { usePortalStore } from "@/store/portal-store";
 
 export function TaskListCard({
   title = "Bugunun gorev akisi",
+  description,
 }: {
   title?: string;
+  description?: string;
 }) {
   const tasks = usePortalStore((state) => state.tasks);
   const toggleTask = usePortalStore((state) => state.toggleTask);
@@ -18,6 +20,7 @@ export function TaskListCard({
     <Card className="border-white/10 bg-white/5">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
+        {description ? <p className="text-sm text-slate-400">{description}</p> : null}
       </CardHeader>
       <CardContent className="space-y-3">
         {tasks.map((task) => (

@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { goalSchema } from "@/lib/utils";
 import { usePortalStore } from "@/store/portal-store";
 
-type GoalFormValues = z.infer<typeof goalSchema>;
+type GoalFormValues = z.input<typeof goalSchema>;
+type GoalSubmitValues = z.output<typeof goalSchema>;
 
 const defaultValues: GoalFormValues = {
   title: "",
@@ -25,12 +26,12 @@ const defaultValues: GoalFormValues = {
 export function GoalForm() {
   const addGoal = usePortalStore((state) => state.addGoal);
 
-  const form = useForm<GoalFormValues>({
+  const form = useForm<GoalFormValues, unknown, GoalSubmitValues>({
     resolver: zodResolver(goalSchema),
     defaultValues,
   });
 
-  const onSubmit = (values: GoalFormValues) => {
+  const onSubmit = (values: GoalSubmitValues) => {
     addGoal(values);
     form.reset(defaultValues);
   };
@@ -85,7 +86,12 @@ export function GoalForm() {
             </div>
             <div className="space-y-2">
               <label className="text-sm text-slate-300">Baslangic ilerleme %</label>
-              <Input type="number" min={0} max={100} {...form.register("progress")} />
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                {...form.register("progress", { valueAsNumber: true })}
+              />
             </div>
           </div>
 

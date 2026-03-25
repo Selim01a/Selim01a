@@ -10,11 +10,13 @@ import type {
   PlannerBoardData,
   PortalData,
   ProfileData,
+  RadarStat,
   ReadingPerformance,
-  TopicReviewItem,
-  TopicTrackingItem,
   StudyArea,
   StudyTask,
+  TopicDistributionItem,
+  TopicReviewItem,
+  TopicTrackingItem,
   WrongReason,
   WordReview,
 } from "@/lib/types";
@@ -86,6 +88,7 @@ const studyAreas: StudyArea[] = [
     summary:
       "Hukuk fakultesi son sinif temposuna uygun sekilde konu, soru ve tekrar dongusu birlikte izleniyor.",
     recommendation: "Idare hukuku ve ceza ozel hukumler icin mini sprint planla.",
+    accent: "from-fuchsia-500 via-violet-500 to-indigo-500",
   },
   {
     examId: "yds",
@@ -97,6 +100,7 @@ const studyAreas: StudyArea[] = [
     summary:
       "Kelime retention guclu; reading inference ve paragraph completion alanlari ekstra takipte.",
     recommendation: "Kelime tekrarlarini reading bloklarinin hemen onune koy.",
+    accent: "from-cyan-500 via-sky-500 to-blue-500",
   },
   {
     examId: "kpss",
@@ -108,6 +112,7 @@ const studyAreas: StudyArea[] = [
     summary:
       "Turkce ve vatandaslik stabil; tarih ve guncel bilgiler tarafinda hizli tekrar gerekiyor.",
     recommendation: "Haftada iki tarih mikro tekrar seansi ekle.",
+    accent: "from-amber-500 via-orange-500 to-rose-500",
   },
 ];
 
@@ -443,15 +448,13 @@ const kpssTrials: MockExam[] = [
   { id: "kpss-t3", exam: "KPSS", date: "20 Mar", net: 66, accuracy: 77, duration: 118 },
 ];
 
-const plannerSlots: PlannerBoardData["daily"] = [
-  { slot: "07:30", title: "YDS kelime tekrar", duration: "30 dk", focus: "Aktif recall" },
-  { slot: "09:00", title: "HMGS medeni hukuk konu + 60 soru", duration: "120 dk", focus: "Derin calisma" },
-  { slot: "13:30", title: "KPSS tarih hizli tekrar", duration: "45 dk", focus: "Mikro tekrar" },
-  { slot: "18:00", title: "Deneme analizi", duration: "60 dk", focus: "Analitik blok" },
-];
-
 const planner: PlannerBoardData = {
-  daily: plannerSlots,
+  daily: [
+    { slot: "07:30", title: "YDS kelime tekrar", duration: "30 dk", focus: "Aktif recall" },
+    { slot: "09:00", title: "HMGS medeni hukuk konu + 60 soru", duration: "120 dk", focus: "Derin calisma" },
+    { slot: "13:30", title: "KPSS tarih hizli tekrar", duration: "45 dk", focus: "Mikro tekrar" },
+    { slot: "18:00", title: "Deneme analizi", duration: "60 dk", focus: "Analitik blok" },
+  ],
   weeklySummary: [
     { label: "Planlanan odak", value: "42 saat" },
     { label: "Tamamlanan blok", value: "18 / 24" },
@@ -520,6 +523,21 @@ const topicTracking: TopicTrackingItem[] = [
   { exam: "HMGS", topic: "Medeni Hukuk - Miras", completion: 87, status: "Guclu", questionCount: 214 },
 ];
 
+const topicDistribution: TopicDistributionItem[] = [
+  { name: "Tamamlandi", value: 44 },
+  { name: "Gelisiyor", value: 31 },
+  { name: "Tekrar", value: 17 },
+  { name: "Riskli", value: 8 },
+];
+
+const radarStats: RadarStat[] = [
+  { subject: "Coverage", hmgs: 84, yds: 71, kpss: 68 },
+  { subject: "Accuracy", hmgs: 81, yds: 73, kpss: 70 },
+  { subject: "Speed", hmgs: 76, yds: 62, kpss: 72 },
+  { subject: "Retention", hmgs: 78, yds: 80, kpss: 64 },
+  { subject: "Exam Readiness", hmgs: 82, yds: 69, kpss: 67 },
+];
+
 const profile: ProfileData = {
   name: "Selim Kaya",
   email: "selim.kaya@example.com",
@@ -529,8 +547,8 @@ const profile: ProfileData = {
   focusMode: "Dengeli",
   notificationLevel: "Standart",
   streakDays: 7,
-  weeklyGoal: "42 saat odakli calisma ve 3 tam deneme",
   avatarFallback: "SK",
+  weeklyGoal: "42 saat odakli calisma ve 3 tam deneme",
 };
 
 export const portalData: PortalData = {
@@ -592,11 +610,13 @@ export const portalData: PortalData = {
   ydsTrials,
   kpssTrials,
   planner,
+  plannerSlots: planner.daily,
   wrongReasons,
   goals,
   readingPerformance,
   wordReviews,
   topicTracking,
+  topicDistribution,
+  radarStats,
   profile,
 };
-

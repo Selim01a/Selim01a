@@ -5,13 +5,18 @@ import { Clock3, Repeat2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TopicReviewItem } from "@/lib/types";
-import { getPriorityTone } from "@/lib/utils";
 
 type TopicReviewCardProps = {
   title: string;
   description: string;
   items: TopicReviewItem[];
 };
+
+function reviewTone(priority: TopicReviewItem["priority"]) {
+  if (priority === "Yuksek") return "bg-rose-500/10 text-rose-200";
+  if (priority === "Orta") return "bg-amber-500/10 text-amber-200";
+  return "bg-emerald-500/10 text-emerald-200";
+}
 
 export function TopicReviewCard({
   title,
@@ -40,7 +45,7 @@ export function TopicReviewCard({
                   {item.exam} • {item.reason}
                 </p>
               </div>
-              <Badge className={getPriorityTone(item.priority)}>{item.priority}</Badge>
+              <Badge className={reviewTone(item.priority)}>{item.priority}</Badge>
             </div>
             <div className="mt-3 inline-flex items-center gap-2 text-xs text-slate-400">
               <Clock3 className="h-4 w-4" />

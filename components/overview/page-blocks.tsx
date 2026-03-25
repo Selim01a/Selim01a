@@ -7,13 +7,10 @@ import {
   Brain,
   CalendarRange,
   Flag,
-  GraduationCap,
-  LineChart,
-  Radar,
+  LineChart as LineChartIcon,
   Settings2,
   ShieldCheck,
   Target,
-  TrendingUp,
 } from "lucide-react";
 import {
   Bar,
@@ -22,11 +19,11 @@ import {
   Cell,
   Pie,
   PieChart,
-  Radar as RechartsRadar,
-  RadarChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
+  Radar,
+  RadarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -43,6 +40,7 @@ import { Progress } from "@/components/ui/progress";
 import { portalData } from "@/lib/mock-data";
 import { getGoalTone, getPriorityTone } from "@/lib/utils";
 import { usePortalStore } from "@/store/portal-store";
+import type { ExamArea, ExamTopic, MockExam, TopicReviewItem } from "@/lib/types";
 
 const pieColors = ["#22c55e", "#38bdf8", "#f59e0b", "#ef4444"];
 
@@ -69,13 +67,9 @@ export function HeroModule({
               <span className="rounded-2xl bg-white/10 p-3 text-emerald-300">
                 <Icon className="h-6 w-6" />
               </span>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">
-                {title}
-              </h1>
+              <h1 className="text-3xl font-semibold tracking-tight text-white">{title}</h1>
             </div>
-            <p className="max-w-2xl text-sm leading-6 text-slate-300">
-              {description}
-            </p>
+            <p className="max-w-2xl text-sm leading-6 text-slate-300">{description}</p>
           </div>
         </div>
       </div>
@@ -107,12 +101,16 @@ export function TopicGrid({
 }: {
   title: string;
   description: string;
-  topics: typeof portalData.hmgsTopics;
+  topics: ExamTopic[];
 }) {
   return (
     <Card className="border-white/10 bg-white/5">
       <CardHeader>
-        <SectionHeader title={title} description={description} className="border-0 bg-transparent p-0" />
+        <SectionHeader
+          title={title}
+          description={description}
+          className="border-0 bg-transparent p-0"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
         {topics.map((topic) => (
@@ -169,12 +167,16 @@ export function CompactAreaGrid({
 }: {
   title: string;
   description: string;
-  items: typeof portalData.hmgsAreas;
+  items: ExamArea[];
 }) {
   return (
     <Card className="border-white/10 bg-white/5">
       <CardHeader>
-        <SectionHeader title={title} description={description} className="border-0 bg-transparent p-0" />
+        <SectionHeader
+          title={title}
+          description={description}
+          className="border-0 bg-transparent p-0"
+        />
       </CardHeader>
       <CardContent className="grid gap-4 lg:grid-cols-3">
         {items.map((item) => (
@@ -201,31 +203,42 @@ export function CompactAreaGrid({
   );
 }
 
-export function ExamTrendCard({
+function ExamTrendCard({
   title,
   description,
   exams,
 }: {
   title: string;
   description: string;
-  exams: typeof portalData.hmgsMockExams;
+  exams: MockExam[];
 }) {
-  return <NetChartCard title={title} description={description} data={exams} />;
+  const data = exams.map((exam, index) => ({
+    label: exam.date,
+    hmgs: exam.exam === "HMGS" ? exam.net : index === 0 ? 0 : exams[index - 1]?.net ?? 0,
+    yds: exam.exam === "YDS" ? exam.net : index === 0 ? 0 : exams[index - 1]?.net ?? 0,
+    kpss: exam.exam === "KPSS" ? exam.net : index === 0 ? 0 : exams[index - 1]?.net ?? 0,
+  }));
+
+  return <NetChartCard title={title} description={description} data={data} />;
 }
 
-export function ReviewTimeline({
+function ReviewTimeline({
   title,
   description,
   items,
 }: {
   title: string;
   description: string;
-  items: typeof portalData.reviewItems;
+  items: TopicReviewItem[];
 }) {
   return (
     <Card className="border-white/10 bg-white/5">
       <CardHeader>
-        <SectionHeader title={title} description={description} className="border-0 bg-transparent p-0" />
+        <SectionHeader
+          title={title}
+          description={description}
+          className="border-0 bg-transparent p-0"
+        />
       </CardHeader>
       <CardContent className="space-y-3">
         {items.map((item) => (
@@ -250,22 +263,24 @@ export function ReviewTimeline({
   );
 }
 
-export function TaskSnapshot({
+function TaskSnapshot({
   title,
   description,
-  tasks,
 }: {
   title: string;
   description: string;
-  tasks: typeof portalData.tasks;
 }) {
   return (
     <Card className="border-white/10 bg-white/5">
       <CardHeader>
-        <SectionHeader title={title} description={description} className="border-0 bg-transparent p-0" />
+        <SectionHeader
+          title={title}
+          description={description}
+          className="border-0 bg-transparent p-0"
+        />
       </CardHeader>
       <CardContent className="space-y-3">
-        {tasks.map((task) => (
+        {portalData.tasks.map((task) => (
           <div
             key={task.id}
             className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3"
@@ -285,8 +300,6 @@ export function TaskSnapshot({
 }
 
 export function PlannerPageContent() {
-  const { planner, tasks } = portalData;
-
   return (
     <div className="space-y-6">
       <HeroModule
@@ -307,7 +320,7 @@ export function PlannerPageContent() {
             <CardTitle className="text-white">Gunluk akis</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {planner.daily.map((item) => (
+            {portalData.planner.daily.map((item) => (
               <div
                 key={item.slot}
                 className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-4"
@@ -328,7 +341,6 @@ export function PlannerPageContent() {
         <TaskSnapshot
           title="Operasyon listesi"
           description="Planlanan ve aktif gorevlerin hizli gorunumu."
-          tasks={tasks}
         />
       </div>
     </div>
@@ -339,7 +351,7 @@ export function ExamAttemptsPage() {
   return (
     <div className="space-y-6">
       <HeroModule
-        icon={LineChart}
+        icon={LineChartIcon}
         title="Deneme Takibi"
         description="Sinav bazli deneme netleri, sure kullanimi ve basari oranindaki momentum degisimini takip et."
         eyebrow="Performans"
@@ -354,7 +366,6 @@ export function ExamAttemptsPage() {
           title="Sinav kulvarlarina gore net trendi"
           description="HMGS, YDS ve KPSS denemelerinde ilerleme bandi."
           data={portalData.mockNets}
-          comparative
         />
         <ReviewTimeline
           title="Deneme sonrasi odak alanlari"
@@ -377,7 +388,7 @@ export function TopicTrackingPage() {
         stats={[
           { label: "Takip edilen konu", value: "14", helper: "Uc sinava yayilmis aktif konu havuzu" },
           { label: "Tekrar bekleyen", value: "5", helper: "Onceligi yuksek odak listesi" },
-          { label: "Mastery oranı", value: "%68", helper: "Tamamlanan + rayinda konular" },
+          { label: "Mastery orani", value: "%68", helper: "Tamamlanan + rayinda konular" },
         ]}
       />
 
@@ -488,8 +499,16 @@ export function GoalManagementPage() {
         eyebrow="Targeting"
         stats={[
           { label: "Aktif hedef", value: `${goals.length}`, helper: "Sinav ve genel hedef karmasi" },
-          { label: "Rayinda", value: `${goals.filter((g) => g.status === "Rayinda").length}`, helper: "Momentum korunan hedefler" },
-          { label: "Riskli", value: `${goals.filter((g) => g.status === "Riskli").length}`, helper: "Aksiyon isteyen hedefler" },
+          {
+            label: "Rayinda",
+            value: `${goals.filter((g) => g.status === "Rayinda").length}`,
+            helper: "Momentum korunan hedefler",
+          },
+          {
+            label: "Riskli",
+            value: `${goals.filter((g) => g.status === "Riskli").length}`,
+            helper: "Aksiyon isteyen hedefler",
+          },
         ]}
       />
 
@@ -588,24 +607,9 @@ export function StatisticsPage() {
                 <PolarGrid stroke="rgba(148,163,184,0.2)" />
                 <PolarAngleAxis dataKey="subject" stroke="#cbd5e1" />
                 <PolarRadiusAxis stroke="#64748b" />
-                <Radar
-                  dataKey="hmgs"
-                  stroke="#a855f7"
-                  fill="#a855f7"
-                  fillOpacity={0.2}
-                />
-                <Radar
-                  dataKey="yds"
-                  stroke="#38bdf8"
-                  fill="#38bdf8"
-                  fillOpacity={0.18}
-                />
-                <Radar
-                  dataKey="kpss"
-                  stroke="#f59e0b"
-                  fill="#f59e0b"
-                  fillOpacity={0.14}
-                />
+                <Radar dataKey="hmgs" stroke="#a855f7" fill="#a855f7" fillOpacity={0.2} />
+                <Radar dataKey="yds" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.18} />
+                <Radar dataKey="kpss" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.14} />
               </RadarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -626,9 +630,21 @@ export function ProfileSettingsPage() {
         description="Calisma ritmi, odak modu, gunluk hedefler ve kisisel dashboard tercihlerini yonet."
         eyebrow="Preferences"
         stats={[
-          { label: "Aktif mod", value: profile.focusMode, helper: "Sinav agirligi bu moda gore dengeleniyor" },
-          { label: "Gunluk hedef", value: `${profile.dailyGoalHours} saat`, helper: "Planner ve streak hesaplari buna gore kurulu" },
-          { label: "Seri", value: `${profile.streakDays} gun`, helper: "Motivasyon bandi premium dashboarda yansiyor" },
+          {
+            label: "Aktif mod",
+            value: profile.focusMode,
+            helper: "Sinav agirligi bu moda gore dengeleniyor",
+          },
+          {
+            label: "Gunluk hedef",
+            value: `${profile.dailyGoalHours} saat`,
+            helper: "Planner ve streak hesaplari buna gore kurulu",
+          },
+          {
+            label: "Seri",
+            value: `${profile.streakDays} gun`,
+            helper: "Motivasyon bandi premium dashboarda yansiyor",
+          },
         ]}
       />
 
@@ -688,7 +704,7 @@ export function HmgsPageContent() {
         <ExamTrendCard
           title="HMGS deneme netleri"
           description="Son denemelerde hukuk hakimiyetindeki artis."
-          exams={portalData.hmgsMockExams}
+          exams={portalData.hmgsTrials}
         />
         <ReviewTimeline
           title="HMGS tekrar zamani gelenler"
@@ -812,7 +828,7 @@ export function KpssPageContent() {
         <ExamTrendCard
           title="KPSS deneme trendi"
           description="Net bandi ve sure verimliligi zaman icinde."
-          exams={portalData.kpssMockExams}
+          exams={portalData.kpssTrials}
         />
         <ReviewTimeline
           title="KPSS tekrar odaklari"
