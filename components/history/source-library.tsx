@@ -3,53 +3,44 @@
 import { ExternalLink, Link2 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { TopicResource } from "@/lib/types";
 import { usePortalStore } from "@/store/portal-store";
 
-export function SourceLibrary() {
-  const topics = usePortalStore((state) => state.topics);
-  const topicsWithSources = topics.filter((topic) => topic.resources.length > 0);
+export function SourceLibrary({ resources }: { resources?: TopicResource[] }) {
+  const fallback = usePortalStore((state) => state.resources);
+  const items = resources ?? fallback;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Kaynak kutuphanesi</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {topicsWithSources.map((topic) => (
+      <CardContent className="space-y-3">
+        {items.map((resource) => (
           <div
-            key={topic.id}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+            key={resource.id}
+            className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 p-4"
           >
-            <div className="mb-3 flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-cyan-300" />
-              <div>
-                <p className="font-medium text-white">{topic.name}</p>
-                <p className="text-xs text-slate-400">{topic.exam}</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-4 w-4 text-cyan-300" />
+                <p className="font-medium text-white">{resource.resourceTitle}</p>
               </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {resource.exam} • {resource.topic} • {resource.resourceType}
+              </p>
+              <p className="mt-2 text-sm text-slate-300">{resource.note}</p>
             </div>
-            <div className="space-y-2">
-              {topic.resources.map((resource) => (
-                <div
-                  key={resource.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-white">{resource.title}</p>
-                    <p className="text-xs text-slate-400">
-                      {resource.type} • {resource.note || "Not eklenmedi"}
-                    </p>
-                  </div>
-                  <a
-                    href={resource.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-cyan-200"
-                  >
-                    Ac <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              ))}
-            </div>
+            {resource.link ? (
+              <a
+                href={resource.link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-cyan-200"
+              >
+                Ac <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            ) : null}
           </div>
         ))}
       </CardContent>

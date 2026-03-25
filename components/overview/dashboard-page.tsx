@@ -4,8 +4,8 @@ import {
   Activity,
   BookOpenText,
   BrainCircuit,
-  Clock3,
   Flame,
+  LineChart,
   Sparkles,
   Target,
 } from "lucide-react";
@@ -18,9 +18,8 @@ import { ProgressRing } from "@/components/overview/progress-ring";
 import { StudyAreaCard } from "@/components/overview/study-area-card";
 import { TaskListCard } from "@/components/overview/task-list-card";
 import { TopicReviewCard } from "@/components/overview/topic-review-card";
-import { ViewSwitcher } from "@/components/overview/view-switcher";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
 import { usePortalStore } from "@/store/portal-store";
 
@@ -29,26 +28,22 @@ export function DashboardPage() {
   const exams = usePortalStore((state) => state.exams);
   const studyAreas = usePortalStore((state) => state.studyAreas);
   const reviewItems = usePortalStore((state) => state.reviewItems);
-  const taskCount = usePortalStore((state) => state.tasks.length);
+  const mockNetSeries = usePortalStore((state) => state.mockNetSeries);
+  const activityLog = usePortalStore((state) => state.activityLog);
   const streakDays = usePortalStore((state) => state.streakDays);
   const motivationMessage = usePortalStore((state) => state.motivationMessage);
-  const mockNets = usePortalStore((state) => state.mockNetSeries);
-  const activityLog = usePortalStore((state) => state.activityLog);
 
   return (
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Genel Dashboard"
         title="Canli sinav komuta merkezi"
-        description="Kullanici girdileriyle ilerleyen, gecmisini gosteren ve verileri yorumlayan premium calisma paneli."
+        description="Kullanici girdileriyle ilerleyen, gecmisini tutan, kaynaklari yoneten ve calisma ritmini yorumlayan premium sistem."
         action={
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge variant="outline" className="gap-2 px-4 py-2">
-              <Flame className="h-4 w-4 text-amber-300" />
-              {streakDays} gun seri
-            </Badge>
-            <ViewSwitcher />
-          </div>
+          <Badge variant="outline" className="gap-2 px-4 py-2">
+            <Flame className="h-4 w-4 text-amber-300" />
+            {streakDays} gun seri
+          </Badge>
         }
       />
 
@@ -56,34 +51,34 @@ export function DashboardPage() {
         <MetricCard
           title="Haftalik odak saati"
           value={`${dashboard.kpis.studyHours} saat`}
-          description="Calisma oturumlarindan toplanan gercek veriler."
-          trendLabel={`${dashboard.kpis.completedTasks} aktif tamamlanan gorev`}
-          icon={Clock3}
+          description="Calisma oturumlarindan hesaplanan canli saat."
+          trendLabel={`${dashboard.quickInsights.length} aktif yorum`}
+          icon={Activity}
         />
         <MetricCard
           title="Ortalama deneme neti"
           value={dashboard.kpis.averageNet.toFixed(1)}
-          description="Kullanici tarafindan girilen denemeler baz aliniyor."
-          trendLabel={`${dashboard.quickInsights.length} aktif icgoru`}
-          icon={Activity}
+          description="Girilen denemelere gore guncellenir."
+          trendLabel={`${dashboard.dueReviews} tekrar bekliyor`}
+          icon={LineChart}
         />
         <MetricCard
           title="Toplam soru hacmi"
-          value={dashboard.totalSolvedQuestions.toString()}
-          description="Konu, deneme ve oturum girdilerinden hesaplanir."
-          trendLabel={`${dashboard.dueReviews} tekrar bekliyor`}
+          value={String(dashboard.totalSolvedQuestions)}
+          description="Konu ve seans girisleriyle buyur."
+          trendLabel={`${dashboard.kpis.completedTasks} gorev tamam`}
           icon={BookOpenText}
         />
         <MetricCard
           title="Motivasyon skoru"
-          value={dashboard.kpis.motivationScore.toString()}
+          value={String(dashboard.kpis.motivationScore)}
           description={motivationMessage}
-          trendLabel={`${taskCount} gorev listede`}
+          trendLabel="Sistem yorumlu"
           icon={Sparkles}
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card>
           <CardContent className="space-y-6 p-6">
             <div className="flex items-center justify-between">
@@ -110,41 +105,44 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <InsightSummary />
+        <InsightSummary insights={usePortalStore.getState().generatedInsights} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <NetChartCard
           title="Deneme net trendi"
-          description="Girilen denemelerden olusan zaman serisi."
-          data={mockNets}
+          description="Kullanici tarafindan girilen deneme verilerine gore canli seri."
+          data={mockNetSeries}
         />
-        <TaskListCard
-          title="Plan ve gorev akisi"
-          description="Tamamlandikca dashboard ve gecmis kayitlari guncellenir."
-        />
+        <TaskListCard title="Plan ve gorev akisi" description="Planlarini tamamladikca sistem gecmisi beslenir." />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {studyAreas.map((area) => (
-          <StudyAreaCard key={area.examId} area={area} />
+          <StudyAreaCard key={`${area.exam}-${area.title}`} area={area} />
         ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <TopicReviewCard
           title="Tekrar zamani gelenler"
-          description="Konu ilerleme ve son tekrar girislerine gore hesaplanir."
+          description="Son seanslar ve konu basarisina gore hesaplanan tekrar listesi."
           items={reviewItems}
         />
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-white">
-              <BrainCircuit className="h-5 w-5 text-violet-300" />
-              Sistem yorumu
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5 p-6">
+            <div className="flex items-center gap-3">
+              <span className="rounded-2xl border border-violet-400/20 bg-violet-400/10 p-2 text-violet-200">
+                <BrainCircuit className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm uppercase tracking-[0.22em] text-violet-200/80">
+                  Sistem yorumu
+                </p>
+                <h3 className="text-xl font-semibold text-white">Guclu ve zayif alanlar</h3>
+              </div>
+            </div>
+
             {dashboard.strengthWeakness.map((item) => (
               <div
                 key={`${item.exam}-${item.label}`}
@@ -162,10 +160,11 @@ export function DashboardPage() {
                 <p className="mt-3 text-sm text-slate-300">{item.summary}</p>
               </div>
             ))}
+
             <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-100">
               <div className="mb-2 flex items-center gap-2 font-medium">
                 <Target className="h-4 w-4" />
-                Yorumlanan hedef odagi
+                Gunun odagi
               </div>
               {dashboard.focusInsight}
             </div>

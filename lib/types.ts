@@ -2,28 +2,19 @@
 
 export type ExamId = "hmgs" | "yds" | "kpss";
 export type ExamLabel = "HMGS" | "YDS" | "KPSS";
-export type PlannerView = "overview" | "input" | "history" | "insights";
+export type GoalStatus = "Rayinda" | "Izlenmeli" | "Riskli";
+export type TaskPriority = "high" | "medium" | "low";
+export type TaskStatus = "Planlandi" | "Devam ediyor" | "Tamamlandi";
+export type SessionMood = "Harika" | "Iyi" | "Normal" | "Zorlayici";
 export type ModuleView = "overview" | "tracking" | "resources" | "history";
+export type PlannerView = "overview" | "input" | "history" | "insights";
+export type ViewMode = "overview" | "entry" | "history" | "analysis";
 
 export type NavItem = {
   title: string;
   href: string;
   icon: string;
   badge?: string;
-};
-
-export type ExamSummary = {
-  id: ExamId;
-  name: string;
-  description: string;
-  progress: number;
-  completedTopics: number;
-  totalTopics: number;
-  questionCount: number;
-  successRate: number;
-  weeklyHours: number;
-  focus: string;
-  nextMilestone: string;
 };
 
 export type DashboardKpi = {
@@ -40,31 +31,59 @@ export type StrengthWeakness = {
   type: "strong" | "weak";
 };
 
+export type DashboardInsight = {
+  id: string;
+  title: string;
+  body: string;
+  tone: "good" | "warning" | "info";
+  metric: string;
+};
+
+export type InsightItem = DashboardInsight;
+
 export type DashboardSnapshot = {
   kpis: DashboardKpi;
   focusInsight: string;
   quickInsights: string[];
   energyStatus: string;
   strengthWeakness: StrengthWeakness[];
+  totalSolvedQuestions: number;
+  dueReviews: number;
 };
+
+export type ExamSummary = {
+  id: ExamId;
+  name: ExamLabel;
+  description: string;
+  progress: number;
+  completedTopics: number;
+  totalTopics: number;
+  questionCount: number;
+  successRate: number;
+  weeklyHours: number;
+  focus: string;
+  nextMilestone: string;
+};
+
+export type ExamCardSummary = {
+  examId: ExamId;
+  exam: ExamLabel;
+  title: string;
+  accent: string;
+  progress: number;
+  questionCount: number;
+  successRate: number;
+  summary: string;
+  helper: string;
+};
+
+export type StudyTopicArea = ExamCardSummary;
 
 export type MockNetPoint = {
   label: string;
   hmgs: number;
   yds: number;
   kpss: number;
-};
-
-export type StudyArea = {
-  examId: ExamId;
-  title: string;
-  progress: number;
-  solvedQuestions: number;
-  targetQuestions: number;
-  successRate: number;
-  summary: string;
-  recommendation: string;
-  accent: string;
 };
 
 export type TopicReviewItem = {
@@ -78,20 +97,70 @@ export type TopicReviewItem = {
 export type StudyTask = {
   id: string;
   title: string;
-  exam: string;
+  exam: ExamLabel | "Genel";
   duration: number;
-  status: "Planlandi" | "Devam ediyor" | "Tamamlandi";
-  priority: "high" | "medium" | "low";
+  status: TaskStatus;
+  priority: TaskPriority;
   completed: boolean;
+  createdAt: string;
   dueDate?: string;
   notes?: string;
-  createdAt: string;
   completedAt?: string;
+  scheduledDate?: string;
+  type?: "deep-work" | "review" | "mock" | "admin";
+  note?: string;
+};
+
+export type PlannerTask = StudyTask;
+
+export type TaskPayload = {
+  title: string;
+  exam: ExamLabel | "Genel";
+  duration: number;
+  priority: TaskPriority;
+  status: TaskStatus;
+  scheduledDate: string;
+  type: "deep-work" | "review" | "mock" | "admin";
+  note?: string;
+};
+
+export type Goal = {
+  id: string;
+  title: string;
+  exam: ExamLabel | "Genel";
+  progress: number;
+  target: string;
+  deadline: string;
+  status: GoalStatus;
+  note?: string;
+  createdAt: string;
+};
+
+export type TopicEntry = {
+  id: string;
+  exam: ExamLabel;
+  title: string;
+  name?: string;
+  category: string;
+  progress: number;
+  questionCount: number;
+  successRate: number;
+  reviewDue: boolean;
+  sourceCount: number;
+  createdAt: string;
+  updatedAt: string;
+  lastReview: string;
+  nextReview: string;
+  solvedQuestions?: number;
+  accuracy?: number;
+  lastStudiedAt?: string;
+  nextReviewAt?: string;
+  note?: string;
 };
 
 export type ExamTopic = {
   id: string;
-  exam: string;
+  exam: ExamLabel;
   name: string;
   progress: number;
   questionCount: number;
@@ -109,31 +178,91 @@ export type ExamArea = {
   summary: string;
 };
 
+export type SubjectResource = {
+  id: string;
+  exam: ExamLabel;
+  topic: string;
+  resourceTitle: string;
+  resourceType: "Kitap" | "Video" | "PDF" | "Not" | "Deneme";
+  status: "Planlandi" | "Aktif" | "Tamamlandi";
+  note: string;
+  link?: string;
+  createdAt: string;
+};
+
+export type TopicResource = SubjectResource;
+export type SourceLink = SubjectResource;
+
+export type TopicResourceInput = {
+  exam: ExamLabel;
+  topicName: string;
+  category: string;
+  progress: number;
+  successRate: number;
+  sourceTitle: string;
+  sourceType: SubjectResource["resourceType"];
+  sourceLink?: string;
+  sourceNotes: string;
+};
+
+export type StudySession = {
+  id: string;
+  exam: ExamLabel | "Genel";
+  title: string;
+  topicName: string;
+  date: string;
+  minutes: number;
+  questionCount: number;
+  correctCount: number;
+  wrongCount: number;
+  accuracy: number;
+  mood: SessionMood;
+  note: string;
+  createdAt: string;
+};
+
+export type StudySessionInput = {
+  exam: ExamLabel | "Genel";
+  title: string;
+  date: string;
+  durationMinutes: number;
+  questionCount: number;
+  correctCount: number;
+  wrongCount: number;
+  mood: SessionMood;
+  note: string;
+};
+
 export type MockExam = {
   id: string;
-  exam: string;
+  exam: ExamLabel;
+  title: string;
   date: string;
   net: number;
   accuracy: number;
   duration: number;
+  createdAt: string;
+};
+
+export type MockExamEntry = MockExam & {
+  wrongReason?: string;
+  notes?: string;
+};
+
+export type MockExamInput = {
+  exam: ExamLabel;
+  title: string;
+  date: string;
+  net: number;
+  accuracy: number;
+  duration: number;
+  note?: string;
 };
 
 export type WrongReason = {
   label: string;
   value: number;
   note: string;
-};
-
-export type Goal = {
-  id: string;
-  title: string;
-  exam: string;
-  progress: number;
-  target: string;
-  deadline: string;
-  status: "Rayinda" | "Izlenmeli" | "Riskli";
-  note?: string;
-  createdAt: string;
 };
 
 export type ReadingPerformance = {
@@ -158,18 +287,6 @@ export type TopicTrackingItem = {
   questionCount: number;
 };
 
-export type PlannerSlot = {
-  slot: string;
-  title: string;
-  duration: string;
-  focus: string;
-};
-
-export type PlannerBoardData = {
-  daily: PlannerSlot[];
-  weeklySummary: Array<{ label: string; value: string }>;
-};
-
 export type TopicDistributionItem = {
   name: string;
   value: number;
@@ -182,96 +299,40 @@ export type RadarStat = {
   kpss: number;
 };
 
+export type HistoryItem = {
+  id: string;
+  title: string;
+  description: string;
+  type: "session" | "task" | "topic" | "resource" | "goal" | "exam";
+  createdAt: string;
+  exam?: ExamLabel | "Genel";
+};
+
+export type StudyLog = HistoryItem;
+
 export type ProfileData = {
   name: string;
   email: string;
   university: string;
   targetExamWindow: string;
   dailyGoalHours: number;
-  focusMode:
-    | "Dengeli"
-    | "HMGS Oncelikli"
-    | "YDS Oncelikli"
-    | "KPSS Oncelikli";
+  focusMode: "Dengeli" | "HMGS Oncelikli" | "YDS Oncelikli" | "KPSS Oncelikli";
   notificationLevel: "Minimal" | "Standart" | "Yuksek";
   streakDays: number;
   avatarFallback: string;
   weeklyGoal: string;
 };
 
-export type StudyLog = {
-  id: string;
-  exam: "HMGS" | "YDS" | "KPSS" | "Genel";
-  topic: string;
-  duration: number;
-  solvedQuestions: number;
-  accuracy: number;
-  date: string;
-  note: string;
-  source?: string;
+export type ViewPreferenceMap = {
+  dashboard: ViewMode;
+  hmgs: ModuleView;
+  yds: ModuleView;
+  kpss: ModuleView;
+  planner: PlannerView;
 };
 
-export type TopicResource = {
-  id: string;
-  exam: "HMGS" | "YDS" | "KPSS";
-  topic: string;
-  resourceTitle: string;
-  resourceType: "Kitap" | "Video" | "PDF" | "Not" | "Deneme";
-  status: "Planlandi" | "Aktif" | "Tamamlandi";
-  note: string;
-  link?: string;
-  createdAt: string;
-};
-
-export type UserTopic = {
-  id: string;
-  exam: "HMGS" | "YDS" | "KPSS";
-  title: string;
-  sourceCount: number;
-  progress: number;
-  solvedQuestions: number;
-  accuracy: number;
-  lastStudiedAt?: string;
-  nextReviewAt?: string;
-  note?: string;
-};
-
-export type StudyInsight = {
-  id: string;
-  title: string;
-  body: string;
-  tone: "good" | "warning" | "info";
-};
-
-export type PortalData = {
-  nav: NavItem[];
-  exams: ExamSummary[];
-  dashboard: DashboardSnapshot;
-  mockNets: MockNetPoint[];
-  studyAreas: StudyArea[];
-  reviewItems: TopicReviewItem[];
-  tasks: StudyTask[];
-  hmgsTopics: ExamTopic[];
-  ydsTopics: ExamTopic[];
-  kpssTopics: ExamTopic[];
-  hmgsAreas: ExamArea[];
-  ydsAreas: ExamArea[];
-  kpssAreas: ExamArea[];
-  hmgsTrials: MockExam[];
-  ydsTrials: MockExam[];
-  kpssTrials: MockExam[];
-  planner: PlannerBoardData;
-  plannerSlots: PlannerSlot[];
-  wrongReasons: WrongReason[];
-  goals: Goal[];
-  readingPerformance: ReadingPerformance[];
-  wordReviews: WordReview[];
-  topicTracking: TopicTrackingItem[];
-  topicDistribution: TopicDistributionItem[];
-  radarStats: RadarStat[];
-  profile: ProfileData;
-  studyLogs: StudyLog[];
-  topicResources: TopicResource[];
-  userTopics: UserTopic[];
-  generatedInsights: StudyInsight[];
+export type AppView = {
+  id: "overview" | "entry" | "history" | "analysis";
+  label: string;
+  description: string;
 };

@@ -14,24 +14,23 @@ import { usePortalStore } from "@/store/portal-store";
 type TopicResourceInput = z.input<typeof topicResourceSchema>;
 type TopicResourceOutput = z.output<typeof topicResourceSchema>;
 
-const defaultValues: TopicResourceInput = {
-  exam: "HMGS",
-  topicName: "",
-  category: "",
-  progress: 0,
-  successRate: 60,
-  sourceTitle: "",
-  sourceType: "Kitap",
-  sourceLink: "",
-  sourceNotes: "",
-};
-
-export function TopicResourceForm() {
+export function TopicResourceForm({ examId }: { examId?: string } = {}) {
   const addTopicWithResource = usePortalStore((state) => state.addTopicWithResource);
+  const topics = usePortalStore((state) => state.topics);
 
   const form = useForm<TopicResourceInput, unknown, TopicResourceOutput>({
     resolver: zodResolver(topicResourceSchema),
-    defaultValues,
+    defaultValues: {
+      exam: examId?.toUpperCase() === "YDS" ? "YDS" : examId?.toUpperCase() === "KPSS" ? "KPSS" : "HMGS",
+      topicName: "",
+      category: "",
+      progress: 0,
+      successRate: 60,
+      sourceTitle: "",
+      sourceType: "Kitap",
+      sourceLink: "",
+      sourceNotes: "",
+    },
   });
 
   return (
@@ -39,20 +38,23 @@ export function TopicResourceForm() {
       <CardHeader>
         <CardTitle>Konu ve kaynak ekle</CardTitle>
         <CardDescription>
-          Konu başlıklarını, kullandığın kaynakları ve notlarını sisteme gir.
+          Yeni konu basligi ac, ilgili kaynagi ekle ve sistemin bunu yorumlamasini sagla.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form
           className="space-y-4"
           onSubmit={form.handleSubmit((values) => {
-            addTopicWithResource(values);
-            form.reset(defaultValues);
+            addTopicWithResource({
+              ...values,
+              sourceNotes: values.sourceNotes ?? "",
+            });
+            form.reset();
           })}
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Sınav</label>
+              <label className="text-sm text-slate-300">Sinav</label>
               <select
                 className="flex h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white"
                 {...form.register("exam")}
@@ -64,22 +66,22 @@ export function TopicResourceForm() {
             </div>
             <div className="space-y-2">
               <label className="text-sm text-slate-300">Kategori</label>
-              <Input {...form.register("category")} placeholder="Örn. Hukuk / Reading / Tarih" />
+              <Input {...form.register("category")} placeholder="Orn. Hukuk / Reading / Tarih" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Konu başlığı</label>
-            <Input {...form.register("topicName")} placeholder="Örn. Borçlar Hukuku - Temerrüt" />
+            <label className="text-sm text-slate-300">Konu basligi</label>
+            <Input {...form.register("topicName")} placeholder="Orn. Borclar Hukuku - Temerrut" />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">İlerleme %</label>
+              <label className="text-sm text-slate-300">Ilerleme %</label>
               <Input type="number" min={0} max={100} {...form.register("progress", { valueAsNumber: true })} />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Başarı oranı %</label>
+              <label className="text-sm text-slate-300">Basari oranı %</label>
               <Input
                 type="number"
                 min={0}
@@ -91,35 +93,35 @@ export function TopicResourceForm() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Kaynak adı</label>
-              <Input {...form.register("sourceTitle")} placeholder="Örn. İpek Hoca Borçlar PDF" />
+              <label className="text-sm text-slate-300">Kaynak adi</label>
+              <Input {...form.register("sourceTitle")} placeholder="Orn. Medeni Hukuk Fasikul" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Kaynak türü</label>
+              <label className="text-sm text-slate-300">Kaynak tipi</label>
               <select
                 className="flex h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white"
                 {...form.register("sourceType")}
               >
                 <option value="Kitap">Kitap</option>
-                <option value="PDF">PDF</option>
                 <option value="Video">Video</option>
+                <option value="PDF">PDF</option>
                 <option value="Not">Not</option>
-                <option value="Soru Bankası">Soru Bankası</option>
+                <option value="Deneme">Deneme</option>
               </select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Kaynak linki</label>
-            <Input {...form.register("sourceLink")} placeholder="İsteğe bağlı bağlantı" />
+            <label className="text-sm text-slate-300">Link</label>
+            <Input {...form.register("sourceLink")} placeholder="Istege bagli baglanti" />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm text-slate-300">Kaynak notları</label>
+            <label className="text-sm text-slate-300">Not</label>
             <Textarea
               rows={4}
               {...form.register("sourceNotes")}
-              placeholder="Bu kaynak hangi konu boşluğunu kapatıyor, hangi kısım önemli?"
+              placeholder={`Mevcut aktif konu sayisi: ${topics.length}. Bu kaynagin ne ise yaradigini yaz.`}
             />
           </div>
 

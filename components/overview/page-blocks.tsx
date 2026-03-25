@@ -43,23 +43,12 @@ import { SourceLibrary } from "@/components/history/source-library";
 import { NetChartCard } from "@/components/overview/net-chart-card";
 import { TaskListCard } from "@/components/overview/task-list-card";
 import { ViewSwitcher } from "@/components/overview/view-switcher";
-import { SectionHeader } from "@/components/ui/section-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type {
-  ExamArea,
-  ExamId,
-  ExamTopic,
-  HistoryItem,
-  InsightItem,
-  StudySession,
-  StudyTask,
-  TopicResource,
-} from "@/lib/types";
-import { getGoalTone, getPriorityTone, getStatusTone } from "@/lib/utils";
+import { getGoalTone } from "@/lib/utils";
 import { usePortalStore } from "@/store/portal-store";
+import type { ExamId } from "@/lib/types";
 
 const pieColors = ["#22c55e", "#38bdf8", "#f59e0b", "#ef4444"];
 
@@ -105,141 +94,113 @@ function HeroModule({
   );
 }
 
-function TopicGrid({
-  title,
-  description,
-  topics,
-  resources,
-}: {
-  title: string;
-  description: string;
-  topics: ExamTopic[];
-  resources: TopicResource[];
-}) {
-  return (
-    <Card className="border-white/10 bg-white/5">
-      <CardHeader>
-        <SectionHeader title={title} description={description} className="border-0 bg-transparent p-0" />
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2">
-        {topics.map((topic) => {
-          const topicResources = resources.filter((resource) => resource.topicId === topic.id);
+function ModuleOverview({ examId }: { examId: ExamId }) {
+  const topics = usePortalStore((state) => state.getExamTopics(examId));
+  const areas = usePortalStore((state) => state.getExamAreas(examId));
+  const resources = usePortalStore((state) => state.getExamResources(examId));
+  const sessions = usePortalStore((state) => state.getExamSessions(examId));
 
-          return (
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Konu takibi</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+              {topics.map((topic) => (
+              <div
+                key={topic.id}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-white">{topic.title}</p>
+                    <p className="text-xs text-slate-400">{topic.exam}</p>
+                  </div>
+                  <Badge className="bg-white/10 text-slate-200">
+                    %{topic.accuracy} basari
+                  </Badge>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <Progress value={topic.progress} />
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>{topic.solvedQuestions} soru</span>
+                    <span>{topic.nextReviewAt || "Planlanmadi"}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Kaynaklar ve seanslar</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-sm text-slate-400">Kaynak sayisi</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{resources.length}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+              <p className="text-sm text-slate-400">Kayitli calisma seansi</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{sessions.length}</p>
+            </div>
+            <div className="grid gap-3">
+              {areas.map((area) => (
+                <div
+                  key={area.name}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-white">{area.name}</span>
+                    <span className="text-sm text-slate-400">%{area.progress}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ModuleResources({ examId }: { examId: ExamId }) {
+  const topics = usePortalStore((state) => state.getExamTopics(examId));
+  const resources = usePortalStore((state) => state.getExamResources(examId));
+
+  return (
+    <div className="space-y-6">
+      <TopicResourceForm examId={examId} />
+      <SourceLibrary resources={resources} />
+      <Card className="border-white/10 bg-white/5">
+        <CardHeader>
+          <CardTitle className="text-white">Kaynaklanan konular</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+              {topics.map((topic) => (
             <div
               key={topic.id}
               className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
             >
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-medium text-white">{topic.name}</p>
-                  <p className="text-xs text-slate-400">{topic.exam}</p>
-                </div>
-                <Badge className={getStatusTone(topic.status)}>{topic.status}</Badge>
-              </div>
-              <div className="space-y-3">
-                <Progress value={topic.progress} />
-                <div className="grid grid-cols-3 gap-3 text-xs text-slate-300">
-                  <div>
-                    <p className="text-slate-500">Ilerleme</p>
-                    <p className="mt-1 font-semibold text-white">%{topic.progress}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Soru</p>
-                    <p className="mt-1 font-semibold text-white">{topic.questionCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Kaynak</p>
-                    <p className="mt-1 font-semibold text-white">{topicResources.length}</p>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Son tekrar: {topic.lastReview} • Sonraki tekrar: {topic.nextReview}
-                </p>
-              </div>
+                  <p className="font-medium text-white">{topic.title}</p>
+              <p className="mt-2 text-sm text-slate-400">
+                    Son tekrar: {topic.lastStudiedAt || "Henuz yok"} • Sonraki: {topic.nextReviewAt || "Planlanmadi"}
+              </p>
             </div>
-          );
-        })}
-      </CardContent>
-    </Card>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
-function CompactAreaGrid({
-  title,
-  description,
-  items,
-}: {
-  title: string;
-  description: string;
-  items: ExamArea[];
-}) {
-  return (
-    <Card className="border-white/10 bg-white/5">
-      <CardHeader>
-        <SectionHeader title={title} description={description} className="border-0 bg-transparent p-0" />
-      </CardHeader>
-      <CardContent className="grid gap-4 lg:grid-cols-3">
-        {items.map((item) => (
-          <div
-            key={item.name}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-          >
-            <div className="flex items-center justify-between">
-              <p className="font-medium text-white">{item.name}</p>
-              <Badge className="bg-white/10 text-slate-200">{item.focus}</Badge>
-            </div>
-            <p className="mt-2 text-sm text-slate-400">{item.summary}</p>
-            <div className="mt-4 space-y-3">
-              <Progress value={item.progress} />
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>%{item.progress} ilerleme</span>
-                <span>%{item.successRate} basari</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
+function ModuleHistory({ examId }: { examId: ExamId }) {
+  const history = usePortalStore((state) => state.filteredHistory(examId));
+  const insights = usePortalStore((state) => state.generatedInsights);
 
-function SessionFeed({ sessions }: { sessions: StudySession[] }) {
-  return (
-    <Card className="border-white/10 bg-white/5">
-      <CardHeader>
-        <CardTitle className="text-white">Calisma seanslari</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {sessions.slice(0, 5).map((session) => (
-          <div
-            key={session.id}
-            className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium text-white">{session.title}</p>
-                <p className="text-xs text-slate-400">
-                  {session.exam} • {session.minutes} dk • {session.date}
-                </p>
-              </div>
-              <Badge className="bg-cyan-500/10 text-cyan-100">{session.mood}</Badge>
-            </div>
-            <p className="mt-2 text-sm text-slate-400">{session.note}</p>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function TopicHistoryBlock({
-  history,
-  insights,
-}: {
-  history: HistoryItem[];
-  insights: InsightItem[];
-}) {
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
       <HistoryTimeline items={history} />
@@ -248,65 +209,41 @@ function TopicHistoryBlock({
   );
 }
 
-function InteractivePlannerBlock({ tasks, sessions }: { tasks: StudyTask[]; sessions: StudySession[] }) {
-  return (
-    <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-      <div className="space-y-6">
-        <TaskForm />
-        <StudySessionForm />
-        <TaskListCard
-          title="Plan ve gorev takibi"
-          description="Kendi girdigin gorevleri tamamla, durumunu degistir ve ilerle."
-          tasks={tasks}
-        />
-      </div>
-      <SessionFeed sessions={sessions} />
-    </div>
+function ModuleAnalysis({ examId }: { examId: ExamId }) {
+  const mockSeries = usePortalStore((state) => state.mockNetSeries);
+  const reviewItems = usePortalStore((state) =>
+    state.reviewItems.filter((item) => item.exam === examId.toUpperCase()),
   );
-}
+  const insights = usePortalStore((state) => state.generatedInsights);
 
-function ResourceManagementBlock({ topics, resources }: { topics: ExamTopic[]; resources: TopicResource[] }) {
   return (
     <div className="space-y-6">
-      <TopicResourceForm topics={topics} />
-      <SourceLibrary resources={resources} />
-    </div>
-  );
-}
-
-function ProgressAnalysisBlock({
-  title,
-  data,
-  radarData,
-}: {
-  title: string;
-  data: Array<{ label: string; hmgs: number; yds: number; kpss: number }>;
-  radarData: Array<{ subject: string; hmgs: number; yds: number; kpss: number }>;
-}) {
-  return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
       <NetChartCard
-        title={title}
-        description="Kullanicinin girdigi deneme ve calisma verilerinden olusan trendler."
-        data={data}
+        title="Sinav bazli net trendi"
+        description="Kullanici girdisiyle olusan deneme hareketi."
+        data={mockSeries}
       />
-      <Card className="border-white/10 bg-white/5">
-        <CardHeader>
-          <CardTitle className="text-white">Alan dengesi</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="rgba(148,163,184,0.2)" />
-              <PolarAngleAxis dataKey="subject" stroke="#cbd5e1" />
-              <PolarRadiusAxis stroke="#64748b" />
-              <Radar dataKey="hmgs" stroke="#a855f7" fill="#a855f7" fillOpacity={0.18} />
-              <Radar dataKey="yds" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.18} />
-              <Radar dataKey="kpss" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.18} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <Card className="border-white/10 bg-white/5">
+          <CardHeader>
+            <CardTitle className="text-white">Tekrar odaklari</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {reviewItems.map((item) => (
+              <div
+                key={`${item.exam}-${item.topic}`}
+                className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+              >
+                <p className="font-medium text-white">{item.topic}</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {item.reason} • {item.dueLabel}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <InsightSummary insights={insights} />
+      </div>
     </div>
   );
 }
@@ -322,21 +259,11 @@ function ExamPage({
   title: string;
   description: string;
 }) {
-  const {
-    getExamTopics,
-    getExamAreas,
-    getExamResources,
-    getExamSessions,
-    filteredHistory,
-    generatedInsights,
-    dashboard,
-    profile,
-  } = usePortalStore();
-
-  const topics = getExamTopics(examId);
-  const areas = getExamAreas(examId);
-  const resources = getExamResources(examId);
-  const sessions = getExamSessions(examId);
+  const view = usePortalStore((state) => state.viewPreferences[examId]);
+  const setViewPreference = usePortalStore((state) => state.setViewPreference);
+  const topics = usePortalStore((state) => state.getExamTopics(examId));
+  const resources = usePortalStore((state) => state.getExamResources(examId));
+  const sessions = usePortalStore((state) => state.getExamSessions(examId));
 
   return (
     <div className="space-y-6">
@@ -344,214 +271,195 @@ function ExamPage({
         icon={icon}
         title={title}
         description={description}
-        eyebrow={`${profile.focusMode} • ${examId.toUpperCase()} takip`}
+        eyebrow={`${examId.toUpperCase()} modul`}
         stats={[
-          { label: "Konu", value: String(topics.length), helper: "Kullanici tarafindan takip edilen aktif baslik" },
-          { label: "Kaynak", value: String(resources.length), helper: "Eklenen ders notu, video ve kitap kaynagi" },
-          { label: "Seans", value: String(sessions.length), helper: "Gecmiste kaydedilen calisma oturumu" },
+          { label: "Takip edilen konu", value: String(topics.length), helper: "Kullanici tarafindan eklenir" },
+          { label: "Kaynak", value: String(resources.length), helper: "Konuya bagli kutuphane" },
+          { label: "Seans", value: String(sessions.length), helper: "Gecmise dusen kayitlar" },
         ]}
       />
 
       <ViewSwitcher
-        title="Gorunum sec"
-        views={[
-          {
-            id: "overview",
-            label: "Genel gorunum",
-            content: (
-              <div className="space-y-6">
-                <CompactAreaGrid
-                  title="Alan bazli gorunum"
-                  description="Performans ve odak alanlari"
-                  items={areas}
-                />
-                <TopicGrid
-                  title="Konu takibi"
-                  description="Kullanici girdilerine gore olusan konu ve kaynak ekosistemi"
-                  topics={topics}
-                  resources={resources}
-                />
-              </div>
-            ),
-          },
-          {
-            id: "resources",
-            label: "Kaynaklar",
-            content: <ResourceManagementBlock topics={topics} resources={resources} />,
-          },
-          {
-            id: "history",
-            label: "Gecmis",
-            content: (
-              <TopicHistoryBlock
-                history={filteredHistory(examId.toUpperCase() as "HMGS" | "YDS" | "KPSS")}
-                insights={generatedInsights.filter((item) => item.exam === examId.toUpperCase())}
-              />
-            ),
-          },
-          {
-            id: "analysis",
-            label: "Yorum",
-            content: (
-              <ProgressAnalysisBlock
-                title={`${title} performans trendi`}
-                data={dashboard.mockNetSeries}
-                radarData={dashboard.radarStats}
-              />
-            ),
-          },
+        value={view}
+        onChange={(value) => setViewPreference(examId, value as never)}
+        options={[
+          { value: "overview", label: "Genel" },
+          { value: "tracking", label: "Takip" },
+          { value: "resources", label: "Kaynaklar" },
+          { value: "history", label: "Gecmis" },
         ]}
       />
+
+      {view === "overview" ? <ModuleOverview examId={examId} /> : null}
+      {view === "tracking" ? <ModuleAnalysis examId={examId} /> : null}
+      {view === "resources" ? <ModuleResources examId={examId} /> : null}
+      {view === "history" ? <ModuleHistory examId={examId} /> : null}
     </div>
   );
 }
 
+export function HmgsPageContent() {
+  return (
+    <ExamPage
+      examId="hmgs"
+      icon={ShieldCheck}
+      title="HMGS"
+      description="Hukuk dersleri icin detayli konu ilerleme, kaynak, tekrar ve gecmis kaydi yonetimi."
+    />
+  );
+}
+
+export function YdsPageContent() {
+  return (
+    <ExamPage
+      examId="yds"
+      icon={BookOpen}
+      title="YDS"
+      description="Kelime, grammar, reading ve soru tipi performansini veri girerek takip et."
+    />
+  );
+}
+
+export function KpssPageContent() {
+  return (
+    <ExamPage
+      examId="kpss"
+      icon={Flag}
+      title="KPSS"
+      description="Turkce, matematik, tarih, cografya ve vatandaslikta kaynakli ve gecmisli takip."
+    />
+  );
+}
+
 export function PlannerPageContent() {
-  const { tasks, sessions, dashboard, filteredHistory, generatedInsights, topics, resources } =
-    usePortalStore();
+  const view = usePortalStore((state) => state.viewPreferences.planner);
+  const setViewPreference = usePortalStore((state) => state.setViewPreference);
+  const tasks = usePortalStore((state) => state.tasks);
+  const sessions = usePortalStore((state) => state.sessions);
+  const history = usePortalStore((state) => state.filteredHistory());
+  const insights = usePortalStore((state) => state.generatedInsights);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={CalendarRange}
         title="Planner"
-        description="Kullanici verileriyle ilerleyen, plan, seans, gecmis ve yorum katmanlarini birlestiren planlama merkezi."
-        eyebrow="Planlama"
+        description="Planlarini ekle, calisma oturumlarini kaydet, gecmisi incele ve sistem yorumlarini takip et."
+        eyebrow="Interaktif planlama"
         stats={[
-          { label: "Bekleyen gorev", value: String(tasks.filter((task) => !task.completed).length), helper: "Bugun ve yakin odak bloklari" },
-          { label: "Seans", value: String(sessions.length), helper: "Kaydedilen toplam calisma oturumu" },
-          { label: "Seri", value: `${dashboard.streakDays} gun`, helper: "Tamamlanan gun devam dizisi" },
+          { label: "Gorev", value: String(tasks.length), helper: "Tamamlandikca gecmise yazilir" },
+          { label: "Oturum", value: String(sessions.length), helper: "Calisma gechmisi" },
+          { label: "Icgoru", value: String(insights.length), helper: "Verilerin yorumlanmis hali" },
         ]}
       />
 
       <ViewSwitcher
-        title="Planner modlari"
-        views={[
-          {
-            id: "plan",
-            label: "Plan + veri girisi",
-            content: <InteractivePlannerBlock tasks={tasks} sessions={sessions} />,
-          },
-          {
-            id: "history",
-            label: "Gecmis",
-            content: (
-              <TopicHistoryBlock
-                history={filteredHistory("all")}
-                insights={generatedInsights}
-              />
-            ),
-          },
-          {
-            id: "resources",
-            label: "Konu kaynaklari",
-            content: <ResourceManagementBlock topics={topics} resources={resources} />,
-          },
+        value={view}
+        onChange={(value) => setViewPreference("planner", value as never)}
+        options={[
+          { value: "overview", label: "Genel" },
+          { value: "input", label: "Veri girisi" },
+          { value: "history", label: "Gecmis" },
+          { value: "insights", label: "Yorumlar" },
         ]}
       />
+
+      {view === "overview" ? (
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <TaskListCard
+            title="Aktif plan"
+            description="Gorevlerini tamamla ve tarihsel akista gor."
+          />
+          <HistoryTimeline items={history.slice(0, 8)} />
+        </div>
+      ) : null}
+
+      {view === "input" ? (
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <TaskForm />
+          <StudySessionForm />
+        </div>
+      ) : null}
+
+      {view === "history" ? <HistoryTimeline items={history} /> : null}
+      {view === "insights" ? <InsightSummary insights={insights} /> : null}
     </div>
   );
 }
 
 export function ExamAttemptsPage() {
-  const { mockExams, dashboard, generatedInsights, filteredHistory } = usePortalStore();
+  const history = usePortalStore((state) => state.filteredHistory());
+  const mockExams = usePortalStore((state) => state.mockExams);
+  const series = usePortalStore((state) => state.mockNetSeries);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={LineChartIcon}
         title="Deneme Takibi"
-        description="Kullanici deneme sonuclarini girer, sistem trendlere ve zayif alanlara gore yorum uretir."
-        eyebrow="Deneme Intelligence"
+        description="Kendi girdigin denemeleri zaman icinde karsilastir ve notlarini sakla."
+        eyebrow="Deneme kayitlari"
         stats={[
-          { label: "Toplam deneme", value: String(mockExams.length), helper: "Elle girilen deneme kayitlari" },
-          { label: "Ortalama net", value: dashboard.averageNet.toFixed(1), helper: "Tum denemeler ortalamasi" },
-          { label: "Insight", value: String(generatedInsights.length), helper: "Veri tabanli otomatik yorum" },
+          { label: "Toplam deneme", value: String(mockExams.length), helper: "Kullanici girdileri" },
+          { label: "Son net", value: mockExams[0] ? String(mockExams[0].net) : "0", helper: "En guncel deneme" },
+          { label: "Gecmis hareket", value: String(history.length), helper: "Zaman cizelgesi olusur" },
         ]}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <MockExamForm />
-        <InsightSummary insights={generatedInsights} />
+        <InsightSummary />
       </div>
 
-      <ProgressAnalysisBlock
-        title="Net trendi"
-        data={dashboard.mockNetSeries}
-        radarData={dashboard.radarStats}
+      <NetChartCard
+        title="Canli deneme trendi"
+        description="Eklenen denemelerden uretilen grafik."
+        data={series}
       />
-
-      <HistoryTimeline items={filteredHistory("all").filter((item) => item.type === "exam")} />
     </div>
   );
 }
 
 export function TopicTrackingPage() {
-  const { topics, resources, generatedInsights, filteredHistory } = usePortalStore();
+  const topics = usePortalStore((state) => state.topics);
+  const resources = usePortalStore((state) => state.resources);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={BookOpenCheck}
         title="Konu Takibi"
-        description="Konularini ekle, durumlarini guncelle, kaynak bagla ve tekrar ihtiyaclarini sistemin yorumlamasina izin ver."
-        eyebrow="Topic Control"
+        description="Konularini ve onlara bagli kaynaklari kendin yonet; sistem tekrar ve zayif alanlari yorumlasin."
+        eyebrow="Konu + kaynak"
         stats={[
-          { label: "Aktif konu", value: String(topics.length), helper: "Kullanici tarafindan acilan konu havuzu" },
-          { label: "Kaynak", value: String(resources.length), helper: "Konuya bagli kaynak kutuphaneleri" },
-          { label: "Gecmis", value: String(filteredHistory("all").length), helper: "Degisiklik ve calisma kaydi" },
+          { label: "Konu", value: String(topics.length), helper: "Takip ettigin toplam konu" },
+          { label: "Kaynak", value: String(resources.length), helper: "Eklenen kaynak kutuphanesi" },
+          { label: "Tekrar", value: String(topics.filter((t) => Boolean(t.nextReviewAt)).length), helper: "Yaklasan tekrar" },
         ]}
       />
 
-      <ViewSwitcher
-        title="Konu merkezi"
-        views={[
-          {
-            id: "topics",
-            label: "Konu + kaynak",
-            content: (
-              <div className="space-y-6">
-                <TopicResourceForm topics={topics} />
-                <TopicGrid
-                  title="Tum konular"
-                  description="Durum, ilerleme, soru adedi ve bagli kaynaklar"
-                  topics={topics}
-                  resources={resources}
-                />
-                <SourceLibrary resources={resources} />
-              </div>
-            ),
-          },
-          {
-            id: "history",
-            label: "Gecmis",
-            content: (
-              <TopicHistoryBlock
-                history={filteredHistory("all").filter((item) => item.type === "topic")}
-                insights={generatedInsights}
-              />
-            ),
-          },
-        ]}
-      />
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <TopicResourceForm />
+        <SourceLibrary resources={resources} />
+      </div>
     </div>
   );
 }
 
 export function WrongAnalysisPage() {
-  const { dashboard, generatedInsights } = usePortalStore();
+  const wrongReasons = usePortalStore((state) => state.wrongReasons);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={Brain}
         title="Yanlis Analizi"
-        description="Kullanici girdigi deneme, seans ve konu verileri sistem tarafindan guclu-zayif alan yorumuna donusturulur."
-        eyebrow="Root Cause"
+        description="Girilmis deneme ve seanslardan hata nedenlerini gormeni saglar."
+        eyebrow="Yorumlu analiz"
         stats={[
-          { label: "Zayif alan", value: String(dashboard.strengthWeakness.filter((item) => item.type === "weak").length), helper: "Otomatik tespit edilen riskli bolgeler" },
-          { label: "Guclu alan", value: String(dashboard.strengthWeakness.filter((item) => item.type === "strong").length), helper: "Korunmasi gereken alanlar" },
-          { label: "Insight", value: String(generatedInsights.length), helper: "Tum yorum katmani" },
+          { label: "Neden sayisi", value: String(wrongReasons.length), helper: "Otomatik dagitim" },
+          { label: "En yuksek", value: wrongReasons[0]?.label ?? "-", helper: "Su an en baskin hata tipi" },
+          { label: "Aksiyon", value: "Tekrar + kaynak", helper: "Sistem onerisi" },
         ]}
       />
 
@@ -562,7 +470,7 @@ export function WrongAnalysisPage() {
           </CardHeader>
           <CardContent className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dashboard.wrongReasonSeries}>
+              <BarChart data={wrongReasons}>
                 <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} stroke="#94a3b8" />
                 <YAxis tickLine={false} axisLine={false} stroke="#94a3b8" />
@@ -578,34 +486,33 @@ export function WrongAnalysisPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
-        <InsightSummary insights={generatedInsights} />
+        <InsightSummary />
       </div>
     </div>
   );
 }
 
 export function GoalManagementPage() {
-  const { goals } = usePortalStore();
+  const goals = usePortalStore((state) => state.goals);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={Target}
         title="Hedef Yonetimi"
-        description="Kullanici hedeflerini olculur sekilde ekler, sistem ilerleme durumu ve riski yorumlar."
-        eyebrow="Targeting"
+        description="Kendi hedeflerini ekle, sistem ilerleme ve risk durumunu yorumlasin."
+        eyebrow="Hedefler"
         stats={[
-          { label: "Aktif hedef", value: String(goals.length), helper: "Kullanici tanimli hedefler" },
-          { label: "Rayinda", value: String(goals.filter((goal) => goal.status === "Rayinda").length), helper: "Momentum korunan hedefler" },
-          { label: "Riskli", value: String(goals.filter((goal) => goal.status === "Riskli").length), helper: "Dikkat isteyen basliklar" },
+          { label: "Aktif hedef", value: String(goals.length), helper: "Toplam aktif hedef" },
+          { label: "Rayinda", value: String(goals.filter((g) => g.status === "Rayinda").length), helper: "Saglikli ilerleme" },
+          { label: "Riskli", value: String(goals.filter((g) => g.status === "Riskli").length), helper: "Aksiyon gerekebilir" },
         ]}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
-            <CardTitle className="text-white">Hedef portfoyu</CardTitle>
+            <CardTitle className="text-white">Hedef listesi</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {goals.map((goal) => (
@@ -627,7 +534,6 @@ export function GoalManagementPage() {
                     <span>{goal.target}</span>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">Termin: {goal.deadline}</p>
               </div>
             ))}
           </CardContent>
@@ -639,19 +545,21 @@ export function GoalManagementPage() {
 }
 
 export function StatisticsPage() {
-  const { dashboard } = usePortalStore();
+  const topicDistribution = usePortalStore((state) => state.topicDistribution);
+  const radarStats = usePortalStore((state) => state.radarStats);
+  const dashboard = usePortalStore((state) => state.dashboard);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={BarChart3}
         title="Istatistikler"
-        description="Girilen tum seans, gorev, deneme ve konu verilerini yorumlanabilir grafiklere donusturur."
-        eyebrow="Analytics"
+        description="Tum kullanici girdileri uzerinden olusan grafik ve ozetler."
+        eyebrow="Analitik"
         stats={[
-          { label: "Toplam saat", value: `${dashboard.totalStudyHours.toFixed(1)} sa`, helper: "Kaydedilen seanslardan hesaplandi" },
-          { label: "Toplam soru", value: String(dashboard.totalSolvedQuestions), helper: "Konu ve deneme verilerinden toplandi" },
-          { label: "Motivasyon", value: String(dashboard.motivationScore), helper: "Son aktivite ve seri bazli skor" },
+          { label: "Toplam soru", value: String(dashboard.totalSolvedQuestions), helper: "Canli hesaplanir" },
+          { label: "Haftalik saat", value: String(dashboard.kpis.studyHours), helper: "Oturumlardan uretilir" },
+          { label: "Tamamlanan gorev", value: String(dashboard.kpis.completedTasks), helper: "Planner verisi" },
         ]}
       />
 
@@ -664,7 +572,7 @@ export function StatisticsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={dashboard.topicDistribution}
+                  data={topicDistribution}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
@@ -673,7 +581,7 @@ export function StatisticsPage() {
                   innerRadius={65}
                   paddingAngle={4}
                 >
-                  {dashboard.topicDistribution.map((entry, index) => (
+                  {topicDistribution.map((entry, index) => (
                     <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                   ))}
                 </Pie>
@@ -691,17 +599,17 @@ export function StatisticsPage() {
 
         <Card className="border-white/10 bg-white/5">
           <CardHeader>
-            <CardTitle className="text-white">Alan dengesi</CardTitle>
+            <CardTitle className="text-white">Sinav dengesi</CardTitle>
           </CardHeader>
           <CardContent className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={dashboard.radarStats}>
+              <RadarChart data={radarStats}>
                 <PolarGrid stroke="rgba(148,163,184,0.2)" />
                 <PolarAngleAxis dataKey="subject" stroke="#cbd5e1" />
                 <PolarRadiusAxis stroke="#64748b" />
-                <Radar dataKey="hmgs" stroke="#a855f7" fill="#a855f7" fillOpacity={0.18} />
+                <Radar dataKey="hmgs" stroke="#a855f7" fill="#a855f7" fillOpacity={0.2} />
                 <Radar dataKey="yds" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.18} />
-                <Radar dataKey="kpss" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.18} />
+                <Radar dataKey="kpss" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.14} />
               </RadarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -712,19 +620,19 @@ export function StatisticsPage() {
 }
 
 export function ProfileSettingsPage() {
-  const { profile, generatedInsights } = usePortalStore();
+  const profile = usePortalStore((state) => state.profile);
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={Settings2}
         title="Profil / Ayarlar"
-        description="Kullanici hedef penceresi, odak modu ve haftalik hedefler burada yonetilir."
-        eyebrow="Preferences"
+        description="Kisisel hedeflerini, odak modunu ve bildirim ayarlarini guncelle."
+        eyebrow="Profil"
         stats={[
-          { label: "Aktif mod", value: profile.focusMode, helper: "Yorum motorunun agirliklandirmasi buna gore ayarlanir" },
-          { label: "Gunluk hedef", value: `${profile.dailyGoalHours} saat`, helper: "Seans yorumlarinda kullanilir" },
-          { label: "Insight", value: String(generatedInsights.length), helper: "Veri yorum sayisi" },
+          { label: "Odak modu", value: profile.focusMode, helper: "Aktif senaryo" },
+          { label: "Gunluk hedef", value: `${profile.dailyGoalHours} saat`, helper: "Kullanici tercihi" },
+          { label: "Haftalik hedef", value: profile.weeklyGoal, helper: "Ana hedef cizgisi" },
         ]}
       />
 
@@ -739,7 +647,6 @@ export function ProfileSettingsPage() {
               ["E-posta", profile.email],
               ["Universite", profile.university],
               ["Sinav penceresi", profile.targetExamWindow],
-              ["Haftalik hedef", profile.weeklyGoal],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -757,53 +664,20 @@ export function ProfileSettingsPage() {
   );
 }
 
-export function HmgsPageContent() {
-  return (
-    <ExamPage
-      examId="hmgs"
-      icon={ShieldCheck}
-      title="HMGS"
-      description="Hukuk derslerine konu bazli kaynak, seans, deneme ve gecmis takibi ekleyerek daha gercek bir sistemle ilerle."
-    />
-  );
-}
-
-export function YdsPageContent() {
-  return (
-    <ExamPage
-      examId="yds"
-      icon={BookOpen}
-      title="YDS"
-      description="Kelime, grammar, reading ve soru tipi calismalarini veri girerek izle; sistem tekrar ve zayif alan yorumlari uretsin."
-    />
-  );
-}
-
-export function KpssPageContent() {
-  return (
-    <ExamPage
-      examId="kpss"
-      icon={Flag}
-      title="KPSS"
-      description="Turkce, matematik, tarih, cografya, vatandaslik ve guncel bilgiler icin kullanici odakli konu ve kaynak takibi."
-    />
-  );
-}
-
 export function DataCenterPage() {
-  const { topics, resources, tasks, sessions, mockExams, generatedInsights } = usePortalStore();
+  const history = usePortalStore((state) => state.filteredHistory());
 
   return (
     <div className="space-y-6">
       <HeroModule
         icon={Database}
-        title="Veri Giris Merkezi"
-        description="Tum sistemi statik panelden cikarip gercek calisma komuta merkezine donusturen veri katmani."
-        eyebrow="Data Input"
+        title="Veri Merkezi"
+        description="Tum veri girislerini tek yerden yonet; gorev, oturum, deneme ve konu kaydi ekle."
+        eyebrow="Input hub"
         stats={[
-          { label: "Gorev", value: String(tasks.length), helper: "Elle tanimlanan plan" },
-          { label: "Seans", value: String(sessions.length), helper: "Gecmiste yapilan calisma" },
-          { label: "Insight", value: String(generatedInsights.length), helper: "Sistem yorumlari" },
+          { label: "Gorev girisi", value: "Aktif", helper: "Planner ile senkron" },
+          { label: "Deneme girisi", value: "Aktif", helper: "Grafiklere islenir" },
+          { label: "Gecmis", value: String(history.length), helper: "Tum hareketlerin zaman akisi" },
         ]}
       />
 
@@ -811,32 +685,7 @@ export function DataCenterPage() {
         <TaskForm />
         <StudySessionForm />
         <MockExamForm />
-        <TopicResourceForm topics={topics} />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <SourceLibrary resources={resources} />
-        <Card className="border-white/10 bg-white/5">
-          <CardHeader>
-            <CardTitle className="text-white">Veri ozetleri</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              `Toplam konu: ${topics.length}`,
-              `Toplam kaynak: ${resources.length}`,
-              `Toplam deneme: ${mockExams.length}`,
-              `Toplam gorev: ${tasks.length}`,
-              `Toplam seans: ${sessions.length}`,
-            ].map((item) => (
-              <div
-                key={item}
-                className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300"
-              >
-                {item}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <TopicResourceForm />
       </div>
     </div>
   );

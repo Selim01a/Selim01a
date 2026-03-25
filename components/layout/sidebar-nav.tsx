@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { portalData } from "@/lib/mock-data";
+import { navItems } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
@@ -50,7 +50,7 @@ export function SidebarNav() {
       </div>
 
       <nav className="space-y-2">
-        {portalData.nav.map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = iconMap[item.icon as keyof typeof iconMap] ?? LayoutDashboard;
 
@@ -68,7 +68,9 @@ export function SidebarNav() {
               <span
                 className={cn(
                   "flex h-10 w-10 items-center justify-center rounded-xl",
-                  isActive ? "bg-cyan-400/15 text-cyan-300" : "bg-white/5 text-slate-400 group-hover:text-white",
+                  isActive
+                    ? "bg-cyan-400/15 text-cyan-300"
+                    : "bg-white/5 text-slate-400 group-hover:text-white",
                 )}
               >
                 <Icon className="h-5 w-5" />

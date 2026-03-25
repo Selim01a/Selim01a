@@ -4,12 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { profileSchema } from "@/lib/utils";
+import { usePortalStore } from "@/store/portal-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { profileSchema } from "@/lib/utils";
-import { usePortalStore } from "@/store/portal-store";
 
 type ProfileFormValues = z.input<typeof profileSchema>;
 type ProfileSubmitValues = z.output<typeof profileSchema>;
@@ -24,51 +24,69 @@ export function ProfileForm() {
       name: profile.name,
       email: profile.email,
       university: profile.university,
+      targetExamWindow: profile.targetExamWindow,
       focusMode: profile.focusMode,
       dailyGoalHours: profile.dailyGoalHours,
       weeklyGoal: profile.weeklyGoal,
-      targetExamWindow: profile.targetExamWindow,
     },
   });
-
-  const onSubmit = (values: ProfileSubmitValues) => {
-    updateProfile(values);
-  };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Profil ve ayarlar</CardTitle>
-        <CardDescription>
-          Hedef penceresi, odak modu ve haftalik stratejini duzenle.
-        </CardDescription>
+        <CardDescription>Gunluk hedeflerini ve odak modunu guncelle.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+        <form
+          className="space-y-4"
+          onSubmit={form.handleSubmit((values) => {
+            updateProfile(values);
+          })}
+        >
           <div className="grid gap-4 md:grid-cols-2">
-            <Input placeholder="Ad soyad" {...form.register("name")} />
-            <Input type="email" placeholder="E-posta" {...form.register("email")} />
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Ad soyad</label>
+              <Input {...form.register("name")} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">E-posta</label>
+              <Input type="email" {...form.register("email")} />
+            </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <Input placeholder="Universite" {...form.register("university")} />
-            <Input placeholder="Sinav penceresi" {...form.register("targetExamWindow")} />
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Universite</label>
+              <Input {...form.register("university")} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Sinav penceresi</label>
+              <Input {...form.register("targetExamWindow")} />
+            </div>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            <select
-              className="flex h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
-              {...form.register("focusMode")}
-            >
-              <option value="Dengeli">Dengeli</option>
-              <option value="HMGS Oncelikli">HMGS Oncelikli</option>
-              <option value="YDS Oncelikli">YDS Oncelikli</option>
-              <option value="KPSS Oncelikli">KPSS Oncelikli</option>
-            </select>
-            <Input type="number" placeholder="Gunluk hedef saat" {...form.register("dailyGoalHours")} />
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Gunluk hedef saat</label>
+              <Input type="number" {...form.register("dailyGoalHours", { valueAsNumber: true })} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300">Odak modu</label>
+              <select
+                {...form.register("focusMode")}
+                className="flex h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white"
+              >
+                <option value="Dengeli">Dengeli</option>
+                <option value="HMGS Oncelikli">HMGS Oncelikli</option>
+                <option value="YDS Oncelikli">YDS Oncelikli</option>
+                <option value="KPSS Oncelikli">KPSS Oncelikli</option>
+              </select>
+            </div>
           </div>
-          <Textarea rows={4} placeholder="Haftalik ana hedef" {...form.register("weeklyGoal")} />
-          <div className="flex justify-end">
-            <Button type="submit">Profili kaydet</Button>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300">Haftalik ana hedef</label>
+            <Textarea rows={4} {...form.register("weeklyGoal")} />
           </div>
+          <Button type="submit">Tercihleri kaydet</Button>
         </form>
       </CardContent>
     </Card>
