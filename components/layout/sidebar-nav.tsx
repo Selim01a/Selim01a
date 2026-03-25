@@ -6,6 +6,7 @@ import {
   BarChart3,
   BookOpen,
   CalendarCheck2,
+  Database,
   Flag,
   LayoutDashboard,
   LineChart,
@@ -32,6 +33,7 @@ const iconMap = {
   goal: Target,
   stats: BarChart3,
   profile: Settings,
+  data: Database,
 };
 
 export function SidebarNav() {

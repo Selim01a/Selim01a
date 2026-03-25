@@ -1,477 +1,77 @@
 "use client";
 
 import type {
-  ExamArea,
-  ExamSummary,
-  ExamTopic,
+  AppView,
+  DashboardInsight,
+  ExamId,
   Goal,
-  MockExam,
-  MockNetPoint,
-  PlannerBoardData,
-  PortalData,
+  MockExamEntry,
+  NavItem,
   ProfileData,
-  RadarStat,
-  ReadingPerformance,
-  StudyArea,
+  SourceLink,
+  StudySession,
   StudyTask,
-  TopicDistributionItem,
-  TopicReviewItem,
-  TopicTrackingItem,
-  WrongReason,
-  WordReview,
+  TopicEntry,
 } from "@/lib/types";
 
-const exams: ExamSummary[] = [
-  {
-    id: "hmgs",
-    name: "HMGS",
-    description: "Hukuk dersleri, detayli konu takibi ve tekrar sistemi",
-    progress: 74,
-    completedTopics: 58,
-    totalTopics: 78,
-    questionCount: 4860,
-    successRate: 81,
-    weeklyHours: 23,
-    focus: "Medeni hukuk + idare tekrar senkronu",
-    nextMilestone: "Ceza genel hukumler denemesi",
-  },
-  {
-    id: "yds",
-    name: "YDS",
-    description: "Kelime tekrar, grammar, reading ve soru tipi analizi",
-    progress: 67,
-    completedTopics: 34,
-    totalTopics: 51,
-    questionCount: 2210,
-    successRate: 73,
-    weeklyHours: 11,
-    focus: "Reading inference ve vocabulary retention",
-    nextMilestone: "Akademik reading sprint 05",
-  },
-  {
-    id: "kpss",
-    name: "KPSS",
-    description: "Genel yetenek-genel kultur icin veri odakli ilerleme takibi",
-    progress: 62,
-    completedTopics: 43,
-    totalTopics: 69,
-    questionCount: 3175,
-    successRate: 70,
-    weeklyHours: 15,
-    focus: "Tarih tekrar backlog'unu eritmek",
-    nextMilestone: "Genel yetenek karma deneme",
-  },
+export const navItems: NavItem[] = [
+  { title: "Dashboard", href: "/dashboard", icon: "dashboard", badge: "Genel" },
+  { title: "HMGS", href: "/hmgs", icon: "hmgs", badge: "Hukuk" },
+  { title: "YDS", href: "/yds", icon: "yds", badge: "Dil" },
+  { title: "KPSS", href: "/kpss", icon: "kpss", badge: "Kamu" },
+  { title: "Planner", href: "/planner", icon: "planner" },
+  { title: "Deneme Takibi", href: "/deneme-takibi", icon: "exam" },
+  { title: "Konu Takibi", href: "/konu-takibi", icon: "topic" },
+  { title: "Yanlis Analizi", href: "/yanlis-analizi", icon: "wrong" },
+  { title: "Hedef Yonetimi", href: "/hedef-yonetimi", icon: "goal" },
+  { title: "Istatistikler", href: "/istatistikler", icon: "stats" },
+  { title: "Profil / Ayarlar", href: "/profil", icon: "profile" },
 ];
 
-const nav: PortalData["nav"] = [
-  { title: "Genel Dashboard", href: "/dashboard", icon: "layout-dashboard" },
-  { title: "HMGS", href: "/hmgs", icon: "scale", badge: "Hukuk" },
-  { title: "YDS", href: "/yds", icon: "languages", badge: "Dil" },
-  { title: "KPSS", href: "/kpss", icon: "landmark", badge: "Kamu" },
-  { title: "Planner", href: "/planner", icon: "calendar-days" },
-  { title: "Deneme Takibi", href: "/deneme-takibi", icon: "line-chart" },
-  { title: "Konu Takibi", href: "/konu-takibi", icon: "book-copy" },
-  { title: "Yanlis Analizi", href: "/yanlis-analizi", icon: "triangle-alert" },
-  { title: "Hedef Yonetimi", href: "/hedef-yonetimi", icon: "target" },
-  { title: "Istatistikler", href: "/istatistikler", icon: "bar-chart-3" },
-  { title: "Profil / Ayarlar", href: "/profil", icon: "settings-2" },
+export const appViews: AppView[] = [
+  { id: "overview", label: "Genel Bakis", description: "Tum alanlari bir arada gor" },
+  { id: "entry", label: "Veri Girisi", description: "Yeni calisma, deneme ve konu kaydi ekle" },
+  { id: "history", label: "Gecmis", description: "Gecmise donuk tum hareketleri izle" },
+  { id: "analysis", label: "Yorumlar", description: "Sistemin yorumladigi icgoruleri incele" },
 ];
 
-const studyAreas: StudyArea[] = [
-  {
-    examId: "hmgs",
-    title: "HMGS premium takip",
-    progress: 74,
-    solvedQuestions: 4860,
-    targetQuestions: 6800,
-    successRate: 81,
-    summary:
-      "Hukuk fakultesi son sinif temposuna uygun sekilde konu, soru ve tekrar dongusu birlikte izleniyor.",
-    recommendation: "Idare hukuku ve ceza ozel hukumler icin mini sprint planla.",
-    accent: "from-fuchsia-500 via-violet-500 to-indigo-500",
-  },
-  {
-    examId: "yds",
-    title: "YDS language lab",
-    progress: 67,
-    solvedQuestions: 2210,
-    targetQuestions: 3400,
-    successRate: 73,
-    summary:
-      "Kelime retention guclu; reading inference ve paragraph completion alanlari ekstra takipte.",
-    recommendation: "Kelime tekrarlarini reading bloklarinin hemen onune koy.",
-    accent: "from-cyan-500 via-sky-500 to-blue-500",
-  },
-  {
-    examId: "kpss",
-    title: "KPSS command grid",
-    progress: 62,
-    solvedQuestions: 3175,
-    targetQuestions: 5200,
-    successRate: 70,
-    summary:
-      "Turkce ve vatandaslik stabil; tarih ve guncel bilgiler tarafinda hizli tekrar gerekiyor.",
-    recommendation: "Haftada iki tarih mikro tekrar seansi ekle.",
-    accent: "from-amber-500 via-orange-500 to-rose-500",
-  },
-];
-
-const mockNets: MockNetPoint[] = [
-  { label: "D1", hmgs: 61, yds: 48, kpss: 54 },
-  { label: "D2", hmgs: 64, yds: 50, kpss: 57 },
-  { label: "D3", hmgs: 68, yds: 52, kpss: 59 },
-  { label: "D4", hmgs: 71, yds: 55, kpss: 61 },
-  { label: "D5", hmgs: 74, yds: 57, kpss: 64 },
-  { label: "D6", hmgs: 76, yds: 59, kpss: 66 },
-];
-
-const reviewItems: TopicReviewItem[] = [
-  {
-    exam: "HMGS",
-    topic: "Borclar Hukuku - Kusursuz sorumluluk",
-    dueLabel: "Bugun",
-    reason: "Son iki denemede hata yogunlugu artti",
-    priority: "Yuksek",
-  },
-  {
-    exam: "YDS",
-    topic: "Academic Vocabulary Set 12",
-    dueLabel: "Yarin",
-    reason: "Hatirlama egrisi dusmeye basladi",
-    priority: "Orta",
-  },
-  {
-    exam: "KPSS",
-    topic: "Tarih - Tanzimat ve Islahat fermani",
-    dueLabel: "2 gun sonra",
-    reason: "Kronoloji zinciri kiriliyor",
-    priority: "Yuksek",
-  },
-  {
-    exam: "HMGS",
-    topic: "Idare Hukuku - Idari islem unsurlari",
-    dueLabel: "3 gun sonra",
-    reason: "Tekrar penceresi acik",
-    priority: "Dusuk",
-  },
-];
-
-const tasks: StudyTask[] = [
+export const initialTasks: StudyTask[] = [
   {
     id: "task-1",
-    title: "HMGS medeni hukuk 60 soru + 20 dk tekrar",
+    title: "HMGS Medeni Hukuk tekrar blogu",
     exam: "HMGS",
-    duration: 95,
+    duration: 90,
     status: "Planlandi",
     priority: "high",
     completed: false,
+    dueDate: "2026-03-25",
+    notes: "60 soru + 20 dakika hata analizi",
   },
   {
     id: "task-2",
-    title: "YDS 40 kelime tekrar + 2 reading passage",
+    title: "YDS kelime + reading mini set",
     exam: "YDS",
-    duration: 75,
+    duration: 70,
     status: "Devam ediyor",
     priority: "medium",
     completed: false,
+    dueDate: "2026-03-25",
+    notes: "40 kelime, 2 passage",
   },
   {
     id: "task-3",
-    title: "KPSS tarih tekrar kartlari",
+    title: "KPSS tarih kronoloji tekrar",
     exam: "KPSS",
     duration: 45,
     status: "Tamamlandi",
     priority: "high",
     completed: true,
-  },
-  {
-    id: "task-4",
-    title: "Yanlis analizi notlarini temizle",
-    exam: "Genel",
-    duration: 35,
-    status: "Planlandi",
-    priority: "low",
-    completed: false,
+    dueDate: "2026-03-24",
+    notes: "Kartlarla aktif recall",
   },
 ];
 
-const hmgsTopics: ExamTopic[] = [
-  {
-    id: "hmgs-1",
-    exam: "HMGS",
-    name: "Anayasa Hukuku",
-    progress: 82,
-    questionCount: 740,
-    successRate: 84,
-    reviewDue: false,
-    lastReview: "2 gun once",
-    nextReview: "4 gun sonra",
-  },
-  {
-    id: "hmgs-2",
-    exam: "HMGS",
-    name: "Medeni Hukuk",
-    progress: 88,
-    questionCount: 910,
-    successRate: 86,
-    reviewDue: false,
-    lastReview: "Dun",
-    nextReview: "5 gun sonra",
-  },
-  {
-    id: "hmgs-3",
-    exam: "HMGS",
-    name: "Borclar Hukuku",
-    progress: 73,
-    questionCount: 645,
-    successRate: 78,
-    reviewDue: true,
-    lastReview: "6 gun once",
-    nextReview: "Bugun",
-  },
-  {
-    id: "hmgs-4",
-    exam: "HMGS",
-    name: "Ceza Hukuku",
-    progress: 67,
-    questionCount: 590,
-    successRate: 74,
-    reviewDue: true,
-    lastReview: "5 gun once",
-    nextReview: "Yarin",
-  },
-];
-
-const ydsTopics: ExamTopic[] = [
-  {
-    id: "yds-1",
-    exam: "YDS",
-    name: "Vocabulary",
-    progress: 79,
-    questionCount: 1260,
-    successRate: 81,
-    reviewDue: false,
-    lastReview: "Bugun",
-    nextReview: "Yarin",
-  },
-  {
-    id: "yds-2",
-    exam: "YDS",
-    name: "Grammar",
-    progress: 68,
-    questionCount: 420,
-    successRate: 73,
-    reviewDue: false,
-    lastReview: "2 gun once",
-    nextReview: "3 gun sonra",
-  },
-  {
-    id: "yds-3",
-    exam: "YDS",
-    name: "Reading",
-    progress: 63,
-    questionCount: 310,
-    successRate: 66,
-    reviewDue: true,
-    lastReview: "4 gun once",
-    nextReview: "Bugun",
-  },
-  {
-    id: "yds-4",
-    exam: "YDS",
-    name: "Question Types",
-    progress: 57,
-    questionCount: 220,
-    successRate: 64,
-    reviewDue: true,
-    lastReview: "5 gun once",
-    nextReview: "Yarin",
-  },
-];
-
-const kpssTopics: ExamTopic[] = [
-  {
-    id: "kpss-1",
-    exam: "KPSS",
-    name: "Turkce",
-    progress: 72,
-    questionCount: 560,
-    successRate: 77,
-    reviewDue: false,
-    lastReview: "2 gun once",
-    nextReview: "4 gun sonra",
-  },
-  {
-    id: "kpss-2",
-    exam: "KPSS",
-    name: "Matematik",
-    progress: 66,
-    questionCount: 610,
-    successRate: 71,
-    reviewDue: false,
-    lastReview: "Dun",
-    nextReview: "3 gun sonra",
-  },
-  {
-    id: "kpss-3",
-    exam: "KPSS",
-    name: "Tarih",
-    progress: 54,
-    questionCount: 530,
-    successRate: 63,
-    reviewDue: true,
-    lastReview: "7 gun once",
-    nextReview: "Bugun",
-  },
-  {
-    id: "kpss-4",
-    exam: "KPSS",
-    name: "Vatandaslik",
-    progress: 76,
-    questionCount: 505,
-    successRate: 79,
-    reviewDue: false,
-    lastReview: "3 gun once",
-    nextReview: "4 gun sonra",
-  },
-  {
-    id: "kpss-5",
-    exam: "KPSS",
-    name: "Cografya",
-    progress: 58,
-    questionCount: 420,
-    successRate: 67,
-    reviewDue: false,
-    lastReview: "2 gun once",
-    nextReview: "5 gun sonra",
-  },
-  {
-    id: "kpss-6",
-    exam: "KPSS",
-    name: "Guncel Bilgiler",
-    progress: 43,
-    questionCount: 120,
-    successRate: 61,
-    reviewDue: true,
-    lastReview: "8 gun once",
-    nextReview: "Yarin",
-  },
-];
-
-const hmgsAreas: ExamArea[] = [
-  {
-    name: "Medeni Hukuk",
-    focus: "Net kazanimi",
-    progress: 88,
-    successRate: 86,
-    summary: "Temel kavramlar ve soru hizi guclu.",
-  },
-  {
-    name: "Ceza Hukuku",
-    focus: "Karar kalitesi",
-    progress: 67,
-    successRate: 74,
-    summary: "Kusurluluk ve tesebbuste mini tekrar gerekli.",
-  },
-  {
-    name: "Idare Hukuku",
-    focus: "Tekrar sistemi",
-    progress: 61,
-    successRate: 69,
-    summary: "Notlar daginik, tekrar penceresi optimize edilmeli.",
-  },
-];
-
-const ydsAreas: ExamArea[] = [
-  {
-    name: "Vocabulary",
-    focus: "Retention",
-    progress: 79,
-    successRate: 81,
-    summary: "Kelime tekrar mantigi iyi calisiyor.",
-  },
-  {
-    name: "Grammar",
-    focus: "Dogruluk",
-    progress: 68,
-    successRate: 73,
-    summary: "Baglaclar ve tense gecisleri izleniyor.",
-  },
-  {
-    name: "Reading",
-    focus: "Inference",
-    progress: 63,
-    successRate: 66,
-    summary: "Paragraf ici iliski kurma sorulari zayif halka.",
-  },
-];
-
-const kpssAreas: ExamArea[] = [
-  {
-    name: "Turkce",
-    focus: "Stabil performans",
-    progress: 72,
-    successRate: 77,
-    summary: "Paragraf ve anlam bilgisi dengeli.",
-  },
-  {
-    name: "Tarih",
-    focus: "Backlog temizligi",
-    progress: 54,
-    successRate: 63,
-    summary: "Kronoloji ve kavram ciftleri zayif.",
-  },
-  {
-    name: "Vatandaslik",
-    focus: "Koruma fazi",
-    progress: 76,
-    successRate: 79,
-    summary: "Mini tekrarlarla netler korunuyor.",
-  },
-];
-
-const hmgsTrials: MockExam[] = [
-  { id: "hmgs-t1", exam: "HMGS", date: "10 Mar", net: 68, accuracy: 76, duration: 136 },
-  { id: "hmgs-t2", exam: "HMGS", date: "17 Mar", net: 72, accuracy: 79, duration: 133 },
-  { id: "hmgs-t3", exam: "HMGS", date: "24 Mar", net: 76, accuracy: 81, duration: 129 },
-];
-
-const ydsTrials: MockExam[] = [
-  { id: "yds-t1", exam: "YDS", date: "08 Mar", net: 52, accuracy: 69, duration: 172 },
-  { id: "yds-t2", exam: "YDS", date: "16 Mar", net: 56, accuracy: 72, duration: 168 },
-  { id: "yds-t3", exam: "YDS", date: "22 Mar", net: 59, accuracy: 74, duration: 164 },
-];
-
-const kpssTrials: MockExam[] = [
-  { id: "kpss-t1", exam: "KPSS", date: "09 Mar", net: 58, accuracy: 72, duration: 124 },
-  { id: "kpss-t2", exam: "KPSS", date: "18 Mar", net: 63, accuracy: 75, duration: 121 },
-  { id: "kpss-t3", exam: "KPSS", date: "20 Mar", net: 66, accuracy: 77, duration: 118 },
-];
-
-const planner: PlannerBoardData = {
-  daily: [
-    { slot: "07:30", title: "YDS kelime tekrar", duration: "30 dk", focus: "Aktif recall" },
-    { slot: "09:00", title: "HMGS medeni hukuk konu + 60 soru", duration: "120 dk", focus: "Derin calisma" },
-    { slot: "13:30", title: "KPSS tarih hizli tekrar", duration: "45 dk", focus: "Mikro tekrar" },
-    { slot: "18:00", title: "Deneme analizi", duration: "60 dk", focus: "Analitik blok" },
-  ],
-  weeklySummary: [
-    { label: "Planlanan odak", value: "42 saat" },
-    { label: "Tamamlanan blok", value: "18 / 24" },
-    { label: "Bekleyen tekrar", value: "18 konu" },
-    { label: "Deneme hedefi", value: "3 / 4" },
-  ],
-};
-
-const wrongReasons: WrongReason[] = [
-  { label: "Bilgi eksigi", value: 34, note: "Ozellikle KPSS tarih ve HMGS idare hukukunda." },
-  { label: "Dikkat kaybi", value: 23, note: "Uzun bloklarin son 20 sorusunda artis var." },
-  { label: "Soru kokunu yanlis okuma", value: 18, note: "YDS reading ve HMGS ayrim sorularinda goruluyor." },
-  { label: "Zaman baskisi", value: 15, note: "Deneme sonlarinda karar kalitesi dusuyor." },
-  { label: "Yanlis strateji", value: 10, note: "Secenek eleme sureci yeterince disiplinli degil." },
-];
-
-const goals: Goal[] = [
+export const initialGoals: Goal[] = [
   {
     id: "goal-1",
     title: "HMGS netini 80+ bandina tasimak",
@@ -480,6 +80,7 @@ const goals: Goal[] = [
     target: "80 net",
     deadline: "Nisan sonu",
     status: "Rayinda",
+    note: "Haftada 2 deneme + detayli yanlis analizi",
   },
   {
     id: "goal-2",
@@ -489,56 +90,170 @@ const goals: Goal[] = [
     target: "%80 accuracy",
     deadline: "3 haftalik sprint",
     status: "Izlenmeli",
+    note: "Inference ve paraphrase sorularina odaklan",
+  },
+];
+
+export const initialSources: SourceLink[] = [
+  {
+    id: "source-1",
+    exam: "HMGS",
+    title: "Medeni Hukuk Ders Notlari",
+    type: "pdf",
+    url: "https://ornek-kaynak.local/medeni-hukuk",
+    topicTitle: "Medeni Hukuk",
+    note: "Temel kavram tekrarinda kullan",
   },
   {
-    id: "goal-3",
-    title: "KPSS tarih tekrar backlog'unu sifirlamak",
-    exam: "KPSS",
-    progress: 42,
-    target: "0 geciken tekrar",
-    deadline: "Bu ay",
-    status: "Riskli",
+    id: "source-2",
+    exam: "YDS",
+    title: "Academic Vocabulary Listesi",
+    type: "doc",
+    url: "https://ornek-kaynak.local/yds-vocab",
+    topicTitle: "Vocabulary",
+    note: "Her gun 20 yeni kelime",
   },
 ];
 
-const readingPerformance: ReadingPerformance[] = [
-  { passageType: "Main idea", accuracy: 74, avgMinutes: 6.8, solved: 32 },
-  { passageType: "Inference", accuracy: 61, avgMinutes: 8.1, solved: 28 },
-  { passageType: "Paragraph completion", accuracy: 69, avgMinutes: 5.9, solved: 24 },
-  { passageType: "Cloze test", accuracy: 72, avgMinutes: 7.2, solved: 20 },
+export const initialTopics: TopicEntry[] = [
+  {
+    id: "topic-1",
+    exam: "HMGS",
+    title: "Medeni Hukuk",
+    category: "Hukuk Dersleri",
+    progress: 88,
+    questionCount: 910,
+    successRate: 86,
+    reviewDue: false,
+    lastReview: "2026-03-24",
+    nextReview: "2026-03-29",
+    weaknessReason: "Yok",
+    strengthNote: "Kavram oturdu, soru hizi yuksek",
+    sourceIds: ["source-1"],
+  },
+  {
+    id: "topic-2",
+    exam: "HMGS",
+    title: "Idare Hukuku",
+    category: "Hukuk Dersleri",
+    progress: 61,
+    questionCount: 520,
+    successRate: 69,
+    reviewDue: true,
+    lastReview: "2026-03-18",
+    nextReview: "2026-03-25",
+    weaknessReason: "Bilgi eksigi ve tekrar gecikmesi",
+    strengthNote: "Idari islem unsurlari kismen oturdu",
+    sourceIds: [],
+  },
+  {
+    id: "topic-3",
+    exam: "YDS",
+    title: "Reading Inference",
+    category: "Reading",
+    progress: 54,
+    questionCount: 120,
+    successRate: 61,
+    reviewDue: true,
+    lastReview: "2026-03-20",
+    nextReview: "2026-03-25",
+    weaknessReason: "Secenek eleme ve baglam yorumu zayif",
+    strengthNote: "Main idea sorulari daha stabil",
+    sourceIds: [],
+  },
+  {
+    id: "topic-4",
+    exam: "KPSS",
+    title: "Tarih Kronoloji",
+    category: "Tarih",
+    progress: 48,
+    questionCount: 220,
+    successRate: 63,
+    reviewDue: true,
+    lastReview: "2026-03-17",
+    nextReview: "2026-03-25",
+    weaknessReason: "Backlog buyumus, tekrar ritmi zayif",
+    strengthNote: "Kavram bilgisi fena degil",
+    sourceIds: [],
+  },
 ];
 
-const wordReviews: WordReview[] = [
-  { word: "allege", familiarity: 82, dueInDays: 1, source: "Academic Set 08" },
-  { word: "notwithstanding", familiarity: 68, dueInDays: 0, source: "Grammar Connectors" },
-  { word: "constraint", familiarity: 74, dueInDays: 2, source: "Reading Sprint 03" },
-  { word: "discern", familiarity: 59, dueInDays: 0, source: "Inference Vocabulary" },
+export const initialSessions: StudySession[] = [
+  {
+    id: "session-1",
+    exam: "HMGS",
+    topicTitle: "Medeni Hukuk",
+    date: "2026-03-23",
+    duration: 110,
+    questionCount: 80,
+    correctCount: 66,
+    wrongCount: 14,
+    note: "Miras ve hak ehliyeti tekrar edildi",
+    energy: 4,
+  },
+  {
+    id: "session-2",
+    exam: "YDS",
+    topicTitle: "Reading Inference",
+    date: "2026-03-24",
+    duration: 70,
+    questionCount: 24,
+    correctCount: 15,
+    wrongCount: 9,
+    note: "Inference sorularinda baglam kaciyor",
+    energy: 3,
+  },
+  {
+    id: "session-3",
+    exam: "KPSS",
+    topicTitle: "Tarih Kronoloji",
+    date: "2026-03-24",
+    duration: 45,
+    questionCount: 30,
+    correctCount: 19,
+    wrongCount: 11,
+    note: "Tanzimat-Islahat zinciri tekrar edildi",
+    energy: 3,
+  },
 ];
 
-const topicTracking: TopicTrackingItem[] = [
-  { exam: "HMGS", topic: "Ceza Hukuku - Kusurluluk", completion: 64, status: "Gelisiyor", questionCount: 180 },
-  { exam: "YDS", topic: "Reading - Main Idea", completion: 72, status: "Guclu", questionCount: 74 },
-  { exam: "YDS", topic: "Reading - Inference", completion: 52, status: "Zayif", questionCount: 48 },
-  { exam: "KPSS", topic: "Tarih - Islahat Fermani", completion: 48, status: "Zayif", questionCount: 36 },
-  { exam: "HMGS", topic: "Medeni Hukuk - Miras", completion: 87, status: "Guclu", questionCount: 214 },
+export const initialMockExams: MockExamEntry[] = [
+  {
+    id: "mock-1",
+    exam: "HMGS",
+    title: "HMGS Premium Deneme 06",
+    date: "2026-03-24",
+    net: 76,
+    accuracy: 81,
+    duration: 129,
+    wrongReason: "Bilgi eksigi",
+    notes: "Idare ve cezada dikkat dususu oldu",
+  },
+  {
+    id: "mock-2",
+    exam: "YDS",
+    title: "YDS Reading Sprint 04",
+    date: "2026-03-22",
+    net: 59,
+    accuracy: 74,
+    duration: 164,
+    wrongReason: "Soru kokunu yanlis okuma",
+    notes: "Inference ve paragraf tamamlama zayif",
+  },
+  {
+    id: "mock-3",
+    exam: "KPSS",
+    title: "KPSS Genel Yetenek 05",
+    date: "2026-03-20",
+    net: 66,
+    accuracy: 77,
+    duration: 118,
+    wrongReason: "Zaman baskisi",
+    notes: "Matematik son blokta yavaslama var",
+  },
 ];
 
-const topicDistribution: TopicDistributionItem[] = [
-  { name: "Tamamlandi", value: 44 },
-  { name: "Gelisiyor", value: 31 },
-  { name: "Tekrar", value: 17 },
-  { name: "Riskli", value: 8 },
-];
-
-const radarStats: RadarStat[] = [
-  { subject: "Coverage", hmgs: 84, yds: 71, kpss: 68 },
-  { subject: "Accuracy", hmgs: 81, yds: 73, kpss: 70 },
-  { subject: "Speed", hmgs: 76, yds: 62, kpss: 72 },
-  { subject: "Retention", hmgs: 78, yds: 80, kpss: 64 },
-  { subject: "Exam Readiness", hmgs: 82, yds: 69, kpss: 67 },
-];
-
-const profile: ProfileData = {
+export const initialProfile: ProfileData = {
   name: "Selim Kaya",
   email: "selim.kaya@example.com",
   university: "Istanbul Universitesi Hukuk Fakultesi",
@@ -551,72 +266,66 @@ const profile: ProfileData = {
   weeklyGoal: "42 saat odakli calisma ve 3 tam deneme",
 };
 
-export const portalData: PortalData = {
-  nav,
-  exams,
-  dashboard: {
-    kpis: {
-      studyHours: 36,
-      averageNet: 67.4,
-      completedTasks: 3,
-      motivationScore: 91,
+export function examTitle(exam: ExamId | "Genel" | "all") {
+  if (exam === "all") return "Tum Sinavlar";
+  return exam;
+}
+
+export function deriveGoalStatus(progress: number): Goal["status"] {
+  if (progress >= 70) return "Rayinda";
+  if (progress >= 45) return "Izlenmeli";
+  return "Riskli";
+}
+
+export function buildInsightMessages(input: {
+  topics: TopicEntry[];
+  sessions: StudySession[];
+  mockExams: MockExamEntry[];
+  goals: Goal[];
+}): DashboardInsight[] {
+  const overdueTopics = input.topics.filter((topic) => topic.reviewDue);
+  const weakestTopic = [...input.topics].sort((a, b) => a.successRate - b.successRate)[0];
+  const latestExam = [...input.mockExams].sort((a, b) => b.date.localeCompare(a.date))[0];
+  const atRiskGoals = input.goals.filter((goal) => goal.status === "Riskli").length;
+
+  return [
+    {
+      id: "insight-1",
+      title: "Tekrar baskisi haritasi",
+      body:
+        overdueTopics.length > 0
+          ? `${overdueTopics.length} konu tekrar bekliyor. En kritik baslik: ${overdueTopics[0]?.title}.`
+          : "Geciken tekrar bulunmuyor, tekrar sistemi dengede.",
+      tone: overdueTopics.length > 2 ? "warning" : "good",
+      metric: `${overdueTopics.length} geciken tekrar`,
     },
-    focusInsight:
-      "HMGS medeni hukuk ivmesi yuksek, YDS inference sorulari zayif halka, KPSS tarih tekrar gecikmesi ise genel performans tavanini sinirliyor.",
-    quickInsights: [
-      "HMGS tarafinda son 3 denemede +8 net artis var.",
-      "YDS kelime retention guclu ama reading inference %61'de.",
-      "KPSS tarih tekrar backlog'u 8 gunden fazla gecikiyor.",
-    ],
-    energyStatus: "Aksam odak penceresi yuksek",
-    strengthWeakness: [
-      {
-        exam: "HMGS",
-        label: "Medeni Hukuk",
-        summary: "Konu bitirme hizi ve soru dogrulugu premium bantta.",
-        type: "strong",
-      },
-      {
-        exam: "YDS",
-        label: "Reading Inference",
-        summary: "Paragraf ici iliski kurma ve secenek eleme kaslari zayif.",
-        type: "weak",
-      },
-      {
-        exam: "KPSS",
-        label: "Vatandaslik",
-        summary: "Kisa tekrarlarla netler stabil sekilde korunuyor.",
-        type: "strong",
-      },
-      {
-        exam: "KPSS",
-        label: "Tarih Kronoloji",
-        summary: "Olay-orgu zinciri ve tarih-surec baglari tekrar istiyor.",
-        type: "weak",
-      },
-    ],
-  },
-  mockNets,
-  studyAreas,
-  reviewItems,
-  tasks,
-  hmgsTopics,
-  ydsTopics,
-  kpssTopics,
-  hmgsAreas,
-  ydsAreas,
-  kpssAreas,
-  hmgsTrials,
-  ydsTrials,
-  kpssTrials,
-  planner,
-  plannerSlots: planner.daily,
-  wrongReasons,
-  goals,
-  readingPerformance,
-  wordReviews,
-  topicTracking,
-  topicDistribution,
-  radarStats,
-  profile,
-};
+    {
+      id: "insight-2",
+      title: "Zayif alan yorumu",
+      body: weakestTopic
+        ? `${weakestTopic.title} basari orani %${weakestTopic.successRate}. Sistem bu konuyu mini tekrar ve kaynak takviyesi gerektiren alan olarak isaretliyor.`
+        : "Yeterli veri olusmadi.",
+      tone: weakestTopic && weakestTopic.successRate < 65 ? "warning" : "info",
+      metric: weakestTopic ? `%${weakestTopic.successRate}` : "Veri yok",
+    },
+    {
+      id: "insight-3",
+      title: "Deneme yorumu",
+      body: latestExam
+        ? `${latestExam.title} denemesinde net ${latestExam.net}. Ana hata nedeni: ${latestExam.wrongReason}.`
+        : "Henuz deneme verisi girilmedi.",
+      tone: latestExam && latestExam.net >= 70 ? "good" : "info",
+      metric: latestExam ? `${latestExam.net} net` : "0 net",
+    },
+    {
+      id: "insight-4",
+      title: "Hedef takibi yorumu",
+      body:
+        atRiskGoals > 0
+          ? `${atRiskGoals} hedef riskte. Planner tarafinda kisa vadeli aksiyonlar ayarlanmali.`
+          : "Aktif hedeflerin tamami izlenebilir bantta ilerliyor.",
+      tone: atRiskGoals > 0 ? "warning" : "good",
+      metric: `${atRiskGoals} riskli hedef`,
+    },
+  ];
+}

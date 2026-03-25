@@ -1,6 +1,9 @@
 "use client";
 
 export type ExamId = "hmgs" | "yds" | "kpss";
+export type ExamLabel = "HMGS" | "YDS" | "KPSS";
+export type PlannerView = "overview" | "input" | "history" | "insights";
+export type ModuleView = "overview" | "tracking" | "resources" | "history";
 
 export type NavItem = {
   title: string;
@@ -80,6 +83,10 @@ export type StudyTask = {
   status: "Planlandi" | "Devam ediyor" | "Tamamlandi";
   priority: "high" | "medium" | "low";
   completed: boolean;
+  dueDate?: string;
+  notes?: string;
+  createdAt: string;
+  completedAt?: string;
 };
 
 export type ExamTopic = {
@@ -125,6 +132,8 @@ export type Goal = {
   target: string;
   deadline: string;
   status: "Rayinda" | "Izlenmeli" | "Riskli";
+  note?: string;
+  createdAt: string;
 };
 
 export type ReadingPerformance = {
@@ -190,6 +199,50 @@ export type ProfileData = {
   weeklyGoal: string;
 };
 
+export type StudyLog = {
+  id: string;
+  exam: "HMGS" | "YDS" | "KPSS" | "Genel";
+  topic: string;
+  duration: number;
+  solvedQuestions: number;
+  accuracy: number;
+  date: string;
+  note: string;
+  source?: string;
+};
+
+export type TopicResource = {
+  id: string;
+  exam: "HMGS" | "YDS" | "KPSS";
+  topic: string;
+  resourceTitle: string;
+  resourceType: "Kitap" | "Video" | "PDF" | "Not" | "Deneme";
+  status: "Planlandi" | "Aktif" | "Tamamlandi";
+  note: string;
+  link?: string;
+  createdAt: string;
+};
+
+export type UserTopic = {
+  id: string;
+  exam: "HMGS" | "YDS" | "KPSS";
+  title: string;
+  sourceCount: number;
+  progress: number;
+  solvedQuestions: number;
+  accuracy: number;
+  lastStudiedAt?: string;
+  nextReviewAt?: string;
+  note?: string;
+};
+
+export type StudyInsight = {
+  id: string;
+  title: string;
+  body: string;
+  tone: "good" | "warning" | "info";
+};
+
 export type PortalData = {
   nav: NavItem[];
   exams: ExamSummary[];
@@ -217,4 +270,8 @@ export type PortalData = {
   topicDistribution: TopicDistributionItem[];
   radarStats: RadarStat[];
   profile: ProfileData;
+  studyLogs: StudyLog[];
+  topicResources: TopicResource[];
+  userTopics: UserTopic[];
+  generatedInsights: StudyInsight[];
 };

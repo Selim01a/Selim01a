@@ -2,40 +2,52 @@
 
 import {
   Activity,
-  ArrowUpRight,
+  BookOpenText,
   BrainCircuit,
+  Clock3,
   Flame,
-  Radar,
   Sparkles,
   Target,
 } from "lucide-react";
 
-import { InsightCard } from "@/components/overview/insight-card";
+import { HistoryTimeline } from "@/components/history/history-timeline";
+import { InsightSummary } from "@/components/history/insight-summary";
 import { MetricCard } from "@/components/overview/metric-card";
 import { NetChartCard } from "@/components/overview/net-chart-card";
 import { ProgressRing } from "@/components/overview/progress-ring";
 import { StudyAreaCard } from "@/components/overview/study-area-card";
 import { TaskListCard } from "@/components/overview/task-list-card";
 import { TopicReviewCard } from "@/components/overview/topic-review-card";
+import { ViewSwitcher } from "@/components/overview/view-switcher";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
-import { portalData } from "@/lib/mock-data";
 import { usePortalStore } from "@/store/portal-store";
 
 export function DashboardPage() {
-  const { streakDays, motivationMessage } = usePortalStore();
+  const dashboard = usePortalStore((state) => state.dashboard);
+  const exams = usePortalStore((state) => state.exams);
+  const studyAreas = usePortalStore((state) => state.studyAreas);
+  const reviewItems = usePortalStore((state) => state.reviewItems);
+  const taskCount = usePortalStore((state) => state.tasks.length);
+  const streakDays = usePortalStore((state) => state.streakDays);
+  const motivationMessage = usePortalStore((state) => state.motivationMessage);
+  const mockNets = usePortalStore((state) => state.mockNetSeries);
+  const activityLog = usePortalStore((state) => state.activityLog);
 
   return (
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Genel Dashboard"
-        title="Bugunun premium komuta merkezi"
-        description="HMGS + YDS + KPSS hazirligini tek panelde birlestiren veri odakli, modern ve yuksek sinyal ureten calisma merkezi."
+        title="Canli sinav komuta merkezi"
+        description="Kullanici girdileriyle ilerleyen, gecmisini gosteren ve verileri yorumlayan premium calisma paneli."
         action={
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-slate-200">
-            <Flame className="h-4 w-4 text-amber-300" />
-            {streakDays} gunluk seri
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant="outline" className="gap-2 px-4 py-2">
+              <Flame className="h-4 w-4 text-amber-300" />
+              {streakDays} gun seri
+            </Badge>
+            <ViewSwitcher />
           </div>
         }
       />
@@ -43,50 +55,50 @@ export function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Haftalik odak saati"
-          value={`${portalData.dashboard.kpis.studyHours} saat`}
-          description="Planlanan saat hedefinin buyuk kismi tamamlandi."
-          trendLabel="+6.2%"
-          icon={Activity}
+          value={`${dashboard.kpis.studyHours} saat`}
+          description="Calisma oturumlarindan toplanan gercek veriler."
+          trendLabel={`${dashboard.kpis.completedTasks} aktif tamamlanan gorev`}
+          icon={Clock3}
         />
         <MetricCard
           title="Ortalama deneme neti"
-          value={portalData.dashboard.kpis.averageNet.toFixed(1)}
-          description="Son sekiz denemenin agirlikli ortalamasi."
-          trendLabel="+3.8 net"
-          icon={ArrowUpRight}
+          value={dashboard.kpis.averageNet.toFixed(1)}
+          description="Kullanici tarafindan girilen denemeler baz aliniyor."
+          trendLabel={`${dashboard.quickInsights.length} aktif icgoru`}
+          icon={Activity}
         />
         <MetricCard
-          title="Tamamlanan gorev"
-          value={`${portalData.dashboard.kpis.completedTasks}/${portalData.tasks.length}`}
-          description="Bugun planner ve tekrar listesinde biten gorevler."
-          trendLabel="%75 oran"
-          icon={Target}
+          title="Toplam soru hacmi"
+          value={dashboard.totalSolvedQuestions.toString()}
+          description="Konu, deneme ve oturum girdilerinden hesaplanir."
+          trendLabel={`${dashboard.dueReviews} tekrar bekliyor`}
+          icon={BookOpenText}
         />
         <MetricCard
           title="Motivasyon skoru"
-          value={portalData.dashboard.kpis.motivationScore.toString()}
+          value={dashboard.kpis.motivationScore.toString()}
           description={motivationMessage}
-          trendLabel="+12 puan"
+          trendLabel={`${taskCount} gorev listede`}
           icon={Sparkles}
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardContent className="space-y-6 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm uppercase tracking-[0.28em] text-cyan-200/80">
-                  Sinav kapsama alani
+                  Sinav bazli ilerleme
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">
-                  Uclu sinav dominasyonu
+                  HMGS + YDS + KPSS panoramasi
                 </h2>
               </div>
-              <Badge variant="secondary">Premium analytics</Badge>
+              <Badge variant="secondary">Canli veri</Badge>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-              {portalData.exams.map((exam) => (
+              {exams.map((exam) => (
                 <ProgressRing
                   key={exam.id}
                   value={exam.progress}
@@ -98,75 +110,70 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <InsightCard
-          title="Komuta ozeti"
-          description={portalData.dashboard.focusInsight}
-          bullets={portalData.dashboard.quickInsights}
-          footer={`${portalData.dashboard.energyStatus} • En verimli pencere 19:30 - 22:00`}
-          icon={Radar}
-        />
+        <InsightSummary />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <NetChartCard
           title="Deneme net trendi"
-          description="HMGS, YDS ve KPSS net momentumunu tek grafikte izle."
-          data={portalData.mockNets}
+          description="Girilen denemelerden olusan zaman serisi."
+          data={mockNets}
         />
         <TaskListCard
-          title="Bugunun operasyon listesi"
-          description="Plan bloklari, tekrarlar ve analiz adimlari."
+          title="Plan ve gorev akisi"
+          description="Tamamlandikca dashboard ve gecmis kayitlari guncellenir."
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {portalData.studyAreas.map((area) => (
+        {studyAreas.map((area) => (
           <StudyAreaCard key={area.examId} area={area} />
         ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
         <TopicReviewCard
-          title="Tekrar zamani gelen konular"
-          description="Spaced repetition mantigina gore gecikmeden tamamlanmasi gereken basliklar."
-          items={portalData.reviewItems}
+          title="Tekrar zamani gelenler"
+          description="Konu ilerleme ve son tekrar girislerine gore hesaplanir."
+          items={reviewItems}
         />
         <Card>
-          <CardContent className="space-y-6 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.24em] text-violet-200/80">
-                  Guc haritasi
-                </p>
-                <h3 className="mt-1 text-xl font-semibold text-white">
-                  Guclu ve zayif alan analizi
-                </h3>
-              </div>
-              <BrainCircuit className="h-5 w-5 text-violet-200" />
-            </div>
-
-            <div className="space-y-4">
-              {portalData.dashboard.strengthWeakness.map((item) => (
-                <div
-                  key={`${item.exam}-${item.label}`}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">{item.exam}</p>
-                      <h4 className="text-lg font-semibold text-white">{item.label}</h4>
-                    </div>
-                    <Badge variant={item.type === "strong" ? "success" : "warning"}>
-                      {item.type === "strong" ? "Guclu Alan" : "Gelistir"}
-                    </Badge>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-white">
+              <BrainCircuit className="h-5 w-5 text-violet-300" />
+              Sistem yorumu
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {dashboard.strengthWeakness.map((item) => (
+              <div
+                key={`${item.exam}-${item.label}`}
+                className="rounded-2xl border border-white/10 bg-white/5 p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-slate-400">{item.exam}</p>
+                    <h4 className="text-lg font-semibold text-white">{item.label}</h4>
                   </div>
-                  <p className="mt-3 text-sm text-slate-300">{item.summary}</p>
+                  <Badge variant={item.type === "strong" ? "success" : "warning"}>
+                    {item.type === "strong" ? "Guclu" : "Gelistir"}
+                  </Badge>
                 </div>
-              ))}
+                <p className="mt-3 text-sm text-slate-300">{item.summary}</p>
+              </div>
+            ))}
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-100">
+              <div className="mb-2 flex items-center gap-2 font-medium">
+                <Target className="h-4 w-4" />
+                Yorumlanan hedef odagi
+              </div>
+              {dashboard.focusInsight}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <HistoryTimeline items={activityLog.slice(0, 8)} />
     </div>
   );
 }

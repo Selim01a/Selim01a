@@ -3,11 +3,11 @@
 import { CheckCircle2, Circle, Clock3 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { usePortalStore } from "@/store/portal-store";
 
 export function TaskListCard({
-  title = "Bugunun gorev akisi",
+  title = "Gorev listesi",
   description,
 }: {
   title?: string;
@@ -17,7 +17,7 @@ export function TaskListCard({
   const toggleTask = usePortalStore((state) => state.toggleTask);
 
   return (
-    <Card className="border-white/10 bg-white/5">
+    <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <p className="text-sm text-slate-400">{description}</p> : null}
@@ -56,7 +56,7 @@ export function TaskListCard({
                 </span>
               </div>
               <p className="mt-1 text-sm text-slate-400">
-                {task.exam} • {task.status}
+                {task.exam} • {task.status} • {formatDateTime(task.createdAt)}
               </p>
             </div>
           </button>

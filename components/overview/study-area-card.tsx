@@ -5,17 +5,18 @@ import { ArrowUpRight, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import type { StudyArea } from "@/lib/types";
+import type { ExamCardSummary } from "@/lib/types";
 import { formatCompactNumber, formatPercent } from "@/lib/utils";
 
-export function StudyAreaCard({ area }: { area: StudyArea }) {
+export function StudyAreaCard({ area }: { area: ExamCardSummary }) {
   return (
     <Card className="overflow-hidden border-white/10 bg-white/5">
+      <div className={`h-1 w-full bg-gradient-to-r ${area.accent}`} />
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div>
             <Badge variant="secondary" className="mb-3">
-              {area.examId.toUpperCase()}
+              {area.exam}
             </Badge>
             <CardTitle>{area.title}</CardTitle>
           </div>
@@ -33,9 +34,9 @@ export function StudyAreaCard({ area }: { area: StudyArea }) {
             <p className="mt-1 text-xl font-semibold text-white">%{area.progress}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
-            <p className="text-xs text-slate-500">Soru Hacmi</p>
+            <p className="text-xs text-slate-500">Soru</p>
             <p className="mt-1 text-xl font-semibold text-white">
-              {formatCompactNumber(area.solvedQuestions)}
+              {formatCompactNumber(area.questionCount)}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-3">
@@ -46,9 +47,9 @@ export function StudyAreaCard({ area }: { area: StudyArea }) {
           </div>
         </div>
         <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-          <span>Hedef soru: {formatCompactNumber(area.targetQuestions)}</span>
+          <span>{area.helper}</span>
           <span className="inline-flex items-center gap-1 text-cyan-200">
-            {area.recommendation} <ArrowUpRight className="h-4 w-4" />
+            Ayrinti <ArrowUpRight className="h-4 w-4" />
           </span>
         </div>
       </CardContent>
