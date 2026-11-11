@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 
 import pytest
 
@@ -18,8 +19,11 @@ def test_desktop_app_requires_tk_or_constructs() -> None:
     if importlib.util.find_spec("tkinter") is None:
         with pytest.raises(SystemExit, match="Tkinter"):
             EngCoreApp()
-    else:
-        # Don't start mainloop in CI; just construct.
-        app = EngCoreApp()
-        assert app.root is not None
-        app.root.destroy()
+        return
+
+    if not os.environ.get("DISPLAY"):
+        pytest.skip("No DISPLAY; skipping Tk() construction on headless CI")
+
+    app = EngCoreApp()
+    assert app.root is not None
+    app.root.destroy()
