@@ -1,5 +1,13 @@
 """Domain models and ports (Agent 01). Frozen unless Agent 00 approves."""
 
+from engcore.domain.analysis import (
+    AnalysisContext,
+    CompareSession,
+    GeometryRegion,
+    MeshStrategy,
+    MeshVariantResult,
+    StrategyProposal,
+)
 from engcore.domain.models import (
     ArtifactPaths,
     GeometryModel,
@@ -22,10 +30,15 @@ from engcore.domain.ports import (
 )
 
 __all__ = [
+    "AnalysisContext",
     "ArtifactPaths",
+    "CompareSession",
     "GeometryImporter",
     "GeometryModel",
+    "GeometryRegion",
     "MeshModel",
+    "MeshStrategy",
+    "MeshVariantResult",
     "Mesher",
     "MetricComputer",
     "MetricSet",
@@ -35,6 +48,7 @@ __all__ = [
     "RuleDecision",
     "RuleEngine",
     "RuleStatus",
+    "StrategyProposal",
     "Tet4",
     "UnitPolicy",
     "Vec3",

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "engcore"
 version = "0.1.0"
-description = "ENGINEERING//CORE M0 — offline-first structural mesh quality workstation"
+description = "ENGINEERING//CORE — offline-first mesh decision workstation (M0/M1)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -14,7 +14,9 @@ dependencies = []
 
 [project.optional-dependencies]
 gmsh = ["gmsh>=4.12"]
+desktop = ["PySide6>=6.6", "pyvista>=0.43", "pyvistaqt>=0.11"]
 dev = ["pytest>=8.0", "ruff>=0.6"]
+all = ["engcore[desktop,gmsh,dev]"]
 
 [project.scripts]
 engcore = "engcore.cli:main"

@@ -7,9 +7,11 @@ A portable folder/zip you can open on the desktop and try the M0 pipeline withou
 
 ```bash
 cd engcore
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,desktop]"
 python -m engcore.desktop
 ```
+
+M1 UI: set **analysis type** + **solver**, select regions, **recommend**, then **mesh** or **compare** strategies while viewing geometry/mesh in 3D.
 
 Windows double-click fallback: `packaging/Run_ENGINEERING_CORE.bat`
 

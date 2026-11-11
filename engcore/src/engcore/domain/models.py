@@ -67,6 +67,7 @@ class MeshModel:
     geometry_ref: str
     backend: Literal["synthetic", "gmsh"]
     element_type: Literal["TET4"] = "TET4"
+    strategy_id: str | None = None
 
     @property
     def n_nodes(self) -> int:

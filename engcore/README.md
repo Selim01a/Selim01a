@@ -8,11 +8,16 @@ Offline-first, solver-independent structural-engineering workstation.
 
 ```bash
 cd engcore
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,desktop]"
 pytest
-engcore run --fixture unit-cube --confirm-units --units m --out /tmp/engcore-out
-python -m engcore.desktop   # Tk UI (or engcore-desktop)
+engcore run --fixture unit-cube --confirm-units --units m \
+  --analysis static_structural --regions face-xmax --out /tmp/engcore-out
+engcore compare --fixture unit-cube --confirm-units --units m \
+  --analysis impact_crash --solver ls_dyna --regions face-zmax --out /tmp/engcore-cmp
+python -m engcore.desktop   # PySide6 + PyVista viewer (Tk fallback if missing)
 ```
+
+See [docs/M1_MESH_DECISIONS.md](docs/M1_MESH_DECISIONS.md) for the analysis-context / strategy compare flow.
 
 ## Desktop package (download & try)
 
