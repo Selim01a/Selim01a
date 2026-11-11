@@ -1,0 +1,7 @@
+{
+  "solid_id": "open-shell",
+  "is_closed_solid": false,
+  "bbox_min": [0.0, 0.0, 0.0],
+  "bbox_max": [1.0, 1.0, 0.0],
+  "volume": 0.0
+}
