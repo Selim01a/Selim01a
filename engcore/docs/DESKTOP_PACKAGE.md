@@ -11,9 +11,15 @@ python -m pip install -e ".[dev,desktop]"
 python -m engcore.desktop
 ```
 
-M1 UI: set **analysis type** + **solver**, select regions, **recommend**, then **mesh** or **compare** strategies while viewing geometry/mesh in 3D.
+UI flow (one job): **STEP aç → analiz tipi/case → yüzeylere mesh → meshli geometri çıktısı**.
 
-The **3D viewer is mandatory** (PySide6 + PyVista + PyVistaQt). Do not set `QT_QPA_PLATFORM=offscreen` on Windows — that breaks OpenGL. The Windows launcher sets `QT_OPENGL=desktop`.
+1. **STEP seç…** — real `.step` / `.stp` (needs Gmsh; installed with `.[desktop]`)
+2. Set **analiz tipi** + solver hints
+3. **Analiz et ve strateji öner** — case brief + surface-aware strategy
+4. **Mesh üret** — writes `mesh_export/` (JSON + VTK/VTU + STL when available)
+5. Optional **Meshli geometriyi dışa aktar…** to pick a folder
+
+The **3D viewer is mandatory** (PySide6 + PyVista + PyVistaQt + Gmsh). Do not set `QT_QPA_PLATFORM=offscreen` on Windows — that breaks OpenGL. The Windows launcher sets `QT_OPENGL=desktop`.
 
 Windows double-click: `packaging/Run_ENGINEERING_CORE.bat` (from a source checkout) or `Run_ENGINEERING_CORE.bat` inside the tryout zip.
 
@@ -33,12 +39,12 @@ powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
 # → dist\ENGINEERING_CORE_M0_<date>_Windows_x64.zip
 ```
 
-Unzip → double-click `ENGINEERING_CORE.exe` → **Demo fixture** → confirm units → **Run pipeline**.
+Unzip → double-click `ENGINEERING_CORE.exe` → **STEP seç** or **Demo** → confirm units → **Mesh üret**.
 
 ## Demo path
-1. Demo fixture (unit cube)
-2. Units = `m`, confirm
-3. Output under `~/ENGINEERING_CORE_runs/run_<timestamp>/`
-4. Open `quality_report.json`
+1. **Demo (plate+hole)** or open your own STEP
+2. Units = `m` or `mm`, confirm
+3. Choose analysis type → **Analiz et** → **Mesh üret**
+4. Output under `~/ENGINEERING_CORE_runs/run_<timestamp>/mesh_export/`
 
 Geometric mesh PASS does **not** imply solver readiness.

@@ -2,7 +2,7 @@
 
 Offline-first, solver-independent structural-engineering workstation.
 
-**M0 path:** closed-solid STEP → unit confirmation → TET4 mesh → quality metrics → versioned rules → report + mesh export → CLI and desktop UI.
+**Core path:** closed-solid STEP → analysis type/case → surface-aware mesh strategy → TET4 mesh → meshed geometry export (JSON/VTK/STL) + quality report.
 
 ## Quick start
 

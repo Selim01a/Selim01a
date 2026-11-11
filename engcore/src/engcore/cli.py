@@ -166,12 +166,14 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
+        mesh_export_dir = str((args.out / "mesh_export").resolve())
         summary = {
             "run_id": run.run_id,
             "overall_status": run.overall_status(),
             "strategy_id": run.mesh.strategy_id,
             "report": run.artifacts.report_json if run.artifacts else None,
             "mesh": run.artifacts.mesh_json if run.artifacts else None,
+            "mesh_export": mesh_export_dir,
             "n_nodes": run.mesh.n_nodes,
             "n_cells": run.mesh.n_cells,
             "decisions": [

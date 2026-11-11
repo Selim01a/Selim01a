@@ -5,11 +5,18 @@ from pathlib import Path
 from engcore.geometry.synthetic import SyntheticGeometryImporter
 
 
+GMSH_INSTALL_HINT = (
+    "Real STEP/STP files require the Gmsh/OpenCASCADE backend.\n\n"
+    "Install:\n"
+    "  python -m pip install gmsh\n"
+    "or:\n"
+    '  python -m pip install -e ".[desktop]"\n\n'
+    "Then restart ENGINEERING//CORE and open your STEP again."
+)
+
+
 def gmsh_available() -> bool:
     try:
-        import gmsh  # noqa: F401
-
-        # Ensure shared lib loads
         import gmsh as g
 
         _ = g.__version__
@@ -26,20 +33,30 @@ def looks_like_synthetic_marker(path: Path) -> bool:
     return "ENGCORE_SYNTHETIC_UNIT_CUBE" in text
 
 
+class MissingGmshError(RuntimeError):
+    """Raised when a real STEP is opened without Gmsh installed."""
+
+
 def get_geometry_importer(prefer_gmsh: bool = False, path: Path | None = None):
-    """Return a GeometryImporter. Prefer Gmsh for real STEP when available."""
+    """Return importer. Real STEP always needs Gmsh; fixtures may use synthetic."""
     p = Path(path) if path else None
-    use_gmsh = prefer_gmsh
-    if p is not None and p.suffix.lower() in {".step", ".stp"}:
+    suffix = p.suffix.lower() if p else ""
+
+    if suffix in {".step", ".stp"}:
         if looks_like_synthetic_marker(p):
-            use_gmsh = False
-        elif gmsh_available():
-            use_gmsh = True
-    if use_gmsh and gmsh_available():
-        try:
+            return SyntheticGeometryImporter()
+        if gmsh_available():
             from engcore.geometry.gmsh_occ import GmshOccGeometryImporter
 
             return GmshOccGeometryImporter()
-        except Exception:
-            pass
+        raise MissingGmshError(GMSH_INSTALL_HINT)
+
+    if suffix in {".json", ".fixture.json"}:
+        return SyntheticGeometryImporter()
+
+    # Unknown / no path: prefer gmsh if requested and available
+    if prefer_gmsh and gmsh_available():
+        from engcore.geometry.gmsh_occ import GmshOccGeometryImporter
+
+        return GmshOccGeometryImporter()
     return SyntheticGeometryImporter()

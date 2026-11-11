@@ -20,9 +20,11 @@ from engcore.geometry.features import FeatureHint
 from engcore.meshing.factory import get_mesher
 from engcore.quality.metrics import GeometricMetricComputer
 from engcore.reporting.exporter import JsonReportExporter
+from engcore.reporting.mesh_export import export_meshed_geometry
 from engcore.standards.case_review import review_mesh_against_case
 from engcore.standards.engine import SafeRuleEngine
 from engcore.standards.mesh_advisor import MeshStrategyAdvisor
+
 
 
 def make_unit_policy(source_unit: str, confirmed: bool) -> UnitPolicy:
@@ -95,7 +97,7 @@ def run_with_strategy(
     prefer_gmsh: bool = False,
     brief: AnalysisCaseBrief | None = None,
 ) -> tuple[PipelineRun, CaseMeshReview | None]:
-    mesher = get_mesher(prefer_gmsh=prefer_gmsh)
+    mesher = get_mesher(prefer_gmsh=prefer_gmsh, geometry=geometry)
     metrics_computer = GeometricMetricComputer()
     rules = SafeRuleEngine()
     exporter = JsonReportExporter()
@@ -115,6 +117,8 @@ def run_with_strategy(
         decisions=decisions,
     )
     run.artifacts = exporter.export(run, Path(out_dir))
+    # Always emit meshed-geometry package (JSON / VTK / STL when possible)
+    export_meshed_geometry(run, Path(out_dir) / "mesh_export")
     review = None
     if brief is not None:
         review = review_mesh_against_case(brief, metrics, method_id=strategy.strategy_id)
