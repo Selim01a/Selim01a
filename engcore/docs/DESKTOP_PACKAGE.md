@@ -13,7 +13,9 @@ python -m engcore.desktop
 
 M1 UI: set **analysis type** + **solver**, select regions, **recommend**, then **mesh** or **compare** strategies while viewing geometry/mesh in 3D.
 
-Windows double-click fallback: `packaging/Run_ENGINEERING_CORE.bat`
+The **3D viewer is mandatory** (PySide6 + PyVista + PyVistaQt). Do not set `QT_QPA_PLATFORM=offscreen` on Windows — that breaks OpenGL. The Windows launcher sets `QT_OPENGL=desktop`.
+
+Windows double-click: `packaging/Run_ENGINEERING_CORE.bat` (from a source checkout) or `Run_ENGINEERING_CORE.bat` inside the tryout zip.
 
 ## Build portable zip
 

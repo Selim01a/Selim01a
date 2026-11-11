@@ -1,4 +1,4 @@
-"""Desktop entry — prefer PySide6/PyVista workstation; Tk fallback."""
+"""Desktop entry — 3D viewer is mandatory (PySide6 + PyVista + PyVistaQt)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,18 @@ def main() -> None:
     try:
         import PySide6  # noqa: F401
         import pyvista  # noqa: F401
-        from engcore.desktop.mainwindow import run_desktop
+        import pyvistaqt  # noqa: F401
+    except ImportError as exc:
+        raise SystemExit(
+            "ENGINEERING//CORE desktop requires the 3D stack.\n"
+            "Install with:\n"
+            '  python -m pip install -e ".[desktop]"\n'
+            f"Missing import: {exc}"
+        ) from exc
 
-        raise SystemExit(run_desktop())
-    except ImportError:
-        from engcore.desktop.tk_fallback import main as tk_main
+    from engcore.desktop.mainwindow import run_desktop
 
-        tk_main()
+    raise SystemExit(run_desktop())
 
 
 if __name__ == "__main__":

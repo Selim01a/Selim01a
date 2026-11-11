@@ -1,7 +1,9 @@
-"""PySide6 main window: STEP/mesh view + analysis context + strategy compare."""
+"""PySide6 main window — 3D viewer is the backbone of the workspace."""
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +22,14 @@ from engcore.paths import default_output_dir, fixture_dir
 
 
 def run_desktop() -> int:
+    from engcore.desktop.gl_bootstrap import (
+        apply_qt_opengl_attributes,
+        bootstrap_desktop_gl,
+    )
+
+    mode = bootstrap_desktop_gl()
+    apply_qt_opengl_attributes()
+
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import (
         QApplication,
@@ -43,25 +53,13 @@ def run_desktop() -> int:
         QWidget,
     )
 
-    import os
-
-    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
-    from pyvistaqt import QtInteractor
-
-    from engcore.desktop.viewer import (
-        geometry_outline_polydata,
-        geometry_surface_polydata,
-        mesh_to_unstructured,
-        region_box_polydata,
-    )
+    from engcore.desktop.viewer_host import ViewerHost
 
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
-            self.setWindowTitle("ENGINEERING//CORE — Mesh decision workstation")
-            self.resize(1280, 800)
+            self.setWindowTitle("ENGINEERING//CORE — 3D mesh decision workspace")
+            self.resize(1400, 860)
 
             self._geometry = None
             self._proposal = None
@@ -78,7 +76,10 @@ def run_desktop() -> int:
             splitter = QSplitter()
             layout.addWidget(splitter)
 
+            # --- Left controls (narrow) ---
             left = QWidget()
+            left.setMinimumWidth(320)
+            left.setMaximumWidth(440)
             left_l = QVBoxLayout(left)
 
             self.path_label = QLabel(str(self._input_path))
@@ -121,7 +122,7 @@ def run_desktop() -> int:
             form.addRow(self.chk_gmsh)
             left_l.addWidget(ctx_box)
 
-            left_l.addWidget(QLabel("Selectable regions (CAD faces or bbox fallback)"))
+            left_l.addWidget(QLabel("Selectable regions"))
             self.region_list = QListWidget()
             self.region_list.setSelectionMode(QListWidget.MultiSelection)
             self.region_list.itemSelectionChanged.connect(self._on_region_change)
@@ -136,7 +137,7 @@ def run_desktop() -> int:
             left_l.addWidget(QLabel("Case interpretation"))
             self.case_box = QTextEdit()
             self.case_box.setReadOnly(True)
-            self.case_box.setMaximumHeight(120)
+            self.case_box.setMaximumHeight(110)
             left_l.addWidget(self.case_box)
 
             btn_load = QPushButton("Load & recommend strategies")
@@ -149,7 +150,7 @@ def run_desktop() -> int:
 
             self.warnings = QTextEdit()
             self.warnings.setReadOnly(True)
-            self.warnings.setMaximumHeight(110)
+            self.warnings.setMaximumHeight(90)
             left_l.addWidget(self.warnings)
 
             btn_apply = QPushButton("Mesh selected strategy")
@@ -159,7 +160,7 @@ def run_desktop() -> int:
             left_l.addWidget(btn_apply)
             left_l.addWidget(btn_compare)
 
-            left_l.addWidget(QLabel("Compare results — click a row to view that mesh"))
+            left_l.addWidget(QLabel("Compare — click a row to show that mesh in 3D"))
             self.table = QTableWidget(0, 5)
             self.table.setHorizontalHeaderLabels(
                 ["Strategy", "Nodes", "Cells", "Max aspect", "Rules"]
@@ -167,23 +168,22 @@ def run_desktop() -> int:
             self.table.cellClicked.connect(self._on_variant_clicked)
             left_l.addWidget(self.table)
 
+            # --- Center: mandatory 3D backbone ---
             center = QWidget()
-            center_l = QVBoxLayout(center)
-            center_l.addWidget(
-                QLabel(
-                    "3D view — surface preview + mesh. "
-                    "Different strategies show different density/behaviour."
-                )
-            )
-            self.plotter = QtInteractor(center)
-            center_l.addWidget(self.plotter.interactor)
+            try:
+                self.viewer = ViewerHost(center)
+                self.viewer.smoke_render()
+            except Exception as exc:
+                QMessageBox.critical(self, "3D viewer required", str(exc))
+                raise
 
             splitter.addWidget(left)
             splitter.addWidget(center)
-            splitter.setStretchFactor(1, 1)
+            splitter.setStretchFactor(0, 1)
+            splitter.setStretchFactor(1, 3)
+            splitter.setSizes([360, 1040])
 
-            self.statusBar().showMessage("Ready")
-            # Avoid modal confirm storm on startup in headless; still works interactively
+            self.statusBar().showMessage(f"3D workspace ready ({mode})")
             if os.environ.get("ENGCORE_DESKTOP_AUTOLOAD", "1") == "1":
                 try:
                     self._load_and_recommend(confirm=False)
@@ -250,7 +250,6 @@ def run_desktop() -> int:
                     )
                     or "No feature hints."
                 )
-                # Preselect feature-related regions
                 preselect = set()
                 for f in self._features:
                     preselect.update(f.related_region_ids)
@@ -280,8 +279,8 @@ def run_desktop() -> int:
                 self._compare_variants = []
                 self._show_geometry()
                 self.statusBar().showMessage(
-                    f"Loaded {self._geometry.solid_id} via {self._geometry.backend} "
-                    f"({len(self._regions)} regions) · case conf={self._brief.confidence:.2f}"
+                    f"3D: {self._geometry.solid_id} ({self._geometry.backend}) · "
+                    f"{len(self._regions)} regions · case conf={self._brief.confidence:.2f}"
                 )
             except Exception as exc:
                 QMessageBox.critical(self, "Load failed", str(exc))
@@ -321,39 +320,24 @@ def run_desktop() -> int:
                 it.setData(Qt.UserRole, alt)
                 self.strategy_list.addItem(it)
             self.strategy_list.setCurrentRow(0)
-            # Keep warnings shorter in UI — full case is above
-            short = [w for w in self._proposal.warnings if w.startswith("Missing") or w.startswith("Solver") or "DEMO" in w]
+            short = [
+                w
+                for w in self._proposal.warnings
+                if w.startswith("Missing") or w.startswith("Solver") or "DEMO" in w
+            ]
             self.warnings.setPlainText("\n".join(short[:8]) + "\n\n" + rec.rationale)
 
         def _show_geometry(self) -> None:
-            self.plotter.clear()
-            if self._geometry is None:
-                return
-            try:
-                surf = geometry_surface_polydata(self._geometry)
-                self.plotter.add_mesh(surf, color="silver", opacity=0.35, show_edges=True)
-            except Exception:
-                outline = geometry_outline_polydata(self._geometry)
-                self.plotter.add_mesh(outline, style="wireframe", color="black", line_width=2)
-            if self._last_mesh is not None:
-                grid = mesh_to_unstructured(self._last_mesh)
-                self.plotter.add_mesh(grid, show_edges=True, opacity=0.5, color="lightblue")
-            self._draw_region_overlays()
-            self.plotter.reset_camera()
-
-        def _draw_region_overlays(self) -> None:
-            selected = set(self._selected_region_ids())
-            for r in self._regions:
-                if r.region_id not in selected:
-                    continue
-                box = region_box_polydata(r)
-                if box is not None:
-                    self.plotter.add_mesh(box, color="orange", opacity=0.3)
+            self.viewer.show_scene(
+                self._geometry,
+                self._last_mesh,
+                regions=self._regions,
+                selected_region_ids=self._selected_region_ids(),
+            )
 
         def _on_region_change(self) -> None:
             if self._geometry is None:
                 return
-            # Refresh overlays without clearing mesh if possible
             self._show_geometry()
 
         def _mesh_selected(self) -> None:
@@ -369,14 +353,17 @@ def run_desktop() -> int:
                 refine_region_ids=self._selected_region_ids()
                 or item.data(Qt.UserRole).refine_region_ids,
             )
-            out = default_output_dir() / f"run_{datetime.now():%Y%m%d_%H%M%S}_{strategy.strategy_id}"
+            out = (
+                default_output_dir()
+                / f"run_{datetime.now():%Y%m%d_%H%M%S}_{strategy.strategy_id}"
+            )
             try:
                 run, review = run_with_strategy(
                     self._geometry, strategy, out, brief=self._brief
                 )
                 self._last_mesh = run.mesh
                 self._show_geometry()
-                msg = f"{strategy.name}: {run.mesh.n_cells} cells → {out}"
+                msg = f"3D mesh: {strategy.name} · {run.mesh.n_cells} cells → {out}"
                 if review:
                     msg += f" · {review.overall}"
                     self.warnings.setPlainText(review.narrative)
@@ -434,7 +421,7 @@ def run_desktop() -> int:
                     self._last_mesh = session.variants[0].mesh
                 self._show_geometry()
                 self.statusBar().showMessage(
-                    f"Compared {len(session.variants)} strategies — click a row to switch view → {out}"
+                    f"3D compare: {len(session.variants)} strategies — click a row → {out}"
                 )
             except Exception as exc:
                 QMessageBox.critical(self, "Compare failed", str(exc))
@@ -447,11 +434,14 @@ def run_desktop() -> int:
                 self._last_mesh = variant.mesh
                 self._show_geometry()
                 self.statusBar().showMessage(
-                    f"Viewing {variant.strategy.name}: "
+                    f"3D viewing {variant.strategy.name}: "
                     f"{variant.n_nodes} nodes / {variant.n_cells} cells"
                 )
 
-    app = QApplication.instance() or QApplication([])
-    win = MainWindow()
+    app = QApplication.instance() or QApplication(sys.argv)
+    try:
+        win = MainWindow()
+    except Exception:
+        return 2
     win.show()
     return app.exec()
