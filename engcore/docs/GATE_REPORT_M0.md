@@ -44,8 +44,14 @@ None for synthetic M0 path.
 2. Package lives under `/engcore` so profile README at repo root is untouched.
 3. Vendor types confined to optional gmsh adapter modules.
 
+## Desktop packaging (follow-up)
+- Bundled fixtures under `src/engcore/data/fixtures/`
+- Demo-ready Tk UI with output folder + open report
+- `packaging/build_portable.sh` → Linux onedir zip
+- `packaging/build_windows.ps1` → Windows .exe zip (build on Windows)
+- Source portable zip for Python hosts (`Run_ENGINEERING_CORE.bat`)
+
 ## Next tasks
 - Promote selected DEMO rules via ADR when engineering owners approve thresholds
-- Windows installer / PyInstaller packaging
+- Produce Windows .exe zip on a Windows machine via `build_windows.ps1`
 - Optional Gmsh e2e job on runners with gmsh installed
-- Harden tet orientation in synthetic mesher if FAIL rates rise on finer grids

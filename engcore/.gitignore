@@ -10,3 +10,4 @@ build/
 venv/
 *.log
 /tmp/
+*.spec.bak

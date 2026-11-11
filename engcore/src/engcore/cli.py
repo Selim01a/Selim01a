@@ -8,16 +8,16 @@ import sys
 from pathlib import Path
 
 from engcore.orchestration.pipeline import run_pipeline
-
-FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
+from engcore.paths import fixture_dir
 
 
 def _resolve_input(args: argparse.Namespace) -> Path:
+    fixtures = fixture_dir()
     if args.fixture:
         mapping = {
-            "unit-cube": FIXTURES / "unit_cube.step",
-            "unit-cube-json": FIXTURES / "unit_cube.json",
-            "open-solid": FIXTURES / "open_solid.json",
+            "unit-cube": fixtures / "unit_cube.step",
+            "unit-cube-json": fixtures / "unit_cube.json",
+            "open-solid": fixtures / "open_solid.json",
         }
         if args.fixture not in mapping:
             raise SystemExit(f"Unknown fixture: {args.fixture}. Choose from {list(mapping)}")
