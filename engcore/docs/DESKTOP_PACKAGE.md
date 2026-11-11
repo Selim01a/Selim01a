@@ -11,13 +11,14 @@ python -m pip install -e ".[dev,desktop]"
 python -m engcore.desktop
 ```
 
-UI flow (one job): **STEP import (CAD only) → unsur ağacı / yüzey seç → element+size ile mesh → çıktı**.
+UI flow: **STEP (CAD only) → case → Otomatik çalıştır → çıktı**.
 
-1. **STEP seç…** — shows **geometry only** (no automatic analysis mesh)
-2. **Unsur ağacı** — geometry / faces / meshes; hide/show/delete
-3. Set analysis case → **Size öner** (Autodesk / ICEMM / MSC / NAFEMS citations — see `docs/MESH_SIZING.md`)
-4. Choose **TRI3 (yüzey)** or **TET4 (hacim)** + global/local size → **Seçili yüzeye mesh uygula**
-5. Export mesh package (JSON + VTK/STL)
+1. **STEP aç…** — geometry only (no analysis mesh yet)
+2. **Unsur ağacı** — hide/show/delete geometry, faces, meshes
+3. Set analysis type/solver → **Otomatik çalıştır**
+   - detect features → select faces → size (cited) → mesh → export
+4. Or manual: size öner / seçiliye mesh / export
+5. Progress rail shows each automation step (Ansys-like status)
 
 The **3D viewer is mandatory** (PySide6 + PyVista + PyVistaQt + Gmsh). Do not set `QT_QPA_PLATFORM=offscreen` on Windows — that breaks OpenGL. The Windows launcher sets `QT_OPENGL=desktop`.
 

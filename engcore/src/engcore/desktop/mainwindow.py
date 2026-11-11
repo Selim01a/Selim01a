@@ -1,4 +1,4 @@
-"""PySide6 main window — STEP geometry → select faces → sized mesh → export."""
+"""PySide6 main window — CAD import, feature tree, guided automation, mesh export."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from engcore.geometry.factory import MissingGmshError, gmsh_available
 from engcore.geometry.features import detect_feature_hints
 from engcore.geometry.regions import list_regions
 from engcore.meshing.factory import get_mesher
+from engcore.orchestration.automation import run_mesh_automation
 from engcore.orchestration.pipeline import (
     import_geometry,
     interpret_analysis_case,
@@ -48,7 +49,9 @@ def run_desktop() -> int:
         QLabel,
         QMainWindow,
         QMessageBox,
+        QProgressBar,
         QPushButton,
+        QScrollArea,
         QSplitter,
         QTextEdit,
         QTreeWidget,
@@ -63,11 +66,68 @@ def run_desktop() -> int:
     ROLE_KIND = Qt.UserRole
     ROLE_ID = Qt.UserRole + 1
 
+    STYLES = """
+    QMainWindow, QWidget#root { background: #F4F5F7; }
+    QGroupBox {
+        font-weight: 600;
+        border: 1px solid #D0D5DD;
+        border-radius: 6px;
+        margin-top: 10px;
+        padding: 10px 8px 8px 8px;
+        background: #FFFFFF;
+    }
+    QGroupBox::title {
+        subcontrol-origin: margin;
+        left: 10px;
+        padding: 0 4px;
+        color: #1F2937;
+    }
+    QPushButton {
+        background: #1F4E79;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 7px 12px;
+        font-weight: 600;
+    }
+    QPushButton:hover { background: #163A5F; }
+    QPushButton:disabled { background: #9CA3AF; }
+    QPushButton#secondary {
+        background: #EEF2F6;
+        color: #1F2937;
+        border: 1px solid #D0D5DD;
+    }
+    QPushButton#secondary:hover { background: #E5EAF0; }
+    QPushButton#accent {
+        background: #0F766E;
+    }
+    QPushButton#accent:hover { background: #0D9488; }
+    QTreeWidget {
+        border: 1px solid #D0D5DD;
+        border-radius: 4px;
+        background: #FAFBFC;
+    }
+    QLabel#stepRail {
+        font-family: monospace;
+        font-size: 11px;
+        color: #374151;
+        background: #F9FAFB;
+        border: 1px solid #E5E7EB;
+        border-radius: 4px;
+        padding: 6px;
+    }
+    QLabel#brand {
+        color: #111827;
+    }
+    QLabel#muted { color: #6B7280; }
+    """
+
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
-            self.setWindowTitle("ENGINEERING//CORE — STEP → yüzey mesh")
-            self.resize(1400, 860)
+            self.setWindowTitle("ENGINEERING//CORE")
+            self.resize(1440, 880)
+            self.setStyleSheet(STYLES)
 
             self._geometry = None
             self._regions = []
@@ -82,45 +142,65 @@ def run_desktop() -> int:
             self._hidden_meshes: set[str] = set()
             self._deleted_regions: set[str] = set()
             self._deleted_meshes: set[str] = set()
+            self._auto_steps: list[tuple[str, str]] = []
 
             root = QWidget()
+            root.setObjectName("root")
             self.setCentralWidget(root)
             layout = QHBoxLayout(root)
             layout.setContentsMargins(8, 8, 8, 8)
             splitter = QSplitter()
             layout.addWidget(splitter)
 
+            # --- Left scroll panel ---
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setMinimumWidth(380)
+            scroll.setMaximumWidth(480)
             left = QWidget()
-            left.setMinimumWidth(360)
-            left.setMaximumWidth(460)
+            scroll.setWidget(left)
             left_l = QVBoxLayout(left)
             left_l.setSpacing(8)
 
-            title = QLabel("STEP → yüzey seç → mesh")
-            title_font = QFont()
-            title_font.setPointSize(12)
-            title_font.setBold(True)
-            title.setFont(title_font)
-            left_l.addWidget(title)
-            hint = QLabel(
-                "Import sadece CAD geometri gösterir. Mesh, seçtiğin yüzeye "
-                "element tipi + size ile sonradan uygulanır."
+            brand = QLabel("ENGINEERING//CORE")
+            brand.setObjectName("brand")
+            bf = QFont()
+            bf.setPointSize(14)
+            bf.setBold(True)
+            brand.setFont(bf)
+            left_l.addWidget(brand)
+            sub = QLabel(
+                "STEP → case anla → seçili yüzeye mesh → çıktı. "
+                "Sen analizi seç; yazılım kalanı otomatikleştirir."
             )
-            hint.setWordWrap(True)
-            hint.setStyleSheet("color:#555;")
-            left_l.addWidget(hint)
+            sub.setObjectName("muted")
+            sub.setWordWrap(True)
+            left_l.addWidget(sub)
+
+            # Progress rail
+            self.step_rail = QLabel("Bekleniyor: STEP import")
+            self.step_rail.setObjectName("stepRail")
+            self.step_rail.setWordWrap(True)
+            left_l.addWidget(self.step_rail)
+            self.progress = QProgressBar()
+            self.progress.setRange(0, 5)
+            self.progress.setValue(0)
+            self.progress.setTextVisible(True)
+            self.progress.setFormat("Adım %v / %m")
+            left_l.addWidget(self.progress)
 
             # 1 Import
-            g1 = QGroupBox("1 · STEP import")
+            g1 = QGroupBox("1 · Geometri")
             s1 = QVBoxLayout(g1)
-            self.path_label = QLabel("Henüz dosya yok")
+            self.path_label = QLabel("Dosya seçilmedi")
             self.path_label.setWordWrap(True)
-            self.path_label.setStyleSheet("font-family:monospace;font-size:11px;")
+            self.path_label.setStyleSheet("font-family:monospace;font-size:11px;color:#374151;")
             s1.addWidget(self.path_label)
             row = QHBoxLayout()
-            btn_open = QPushButton("STEP seç…")
+            btn_open = QPushButton("STEP aç…")
             btn_open.clicked.connect(self._browse_step)
             btn_demo = QPushButton("Demo")
+            btn_demo.setObjectName("secondary")
             btn_demo.clicked.connect(self._load_demo)
             row.addWidget(btn_open)
             row.addWidget(btn_demo)
@@ -132,8 +212,9 @@ def run_desktop() -> int:
             urow.addWidget(self.units)
             s1.addLayout(urow)
             self.backend_label = QLabel(
-                f"Gmsh: {'hazır' if gmsh_available() else 'yok (gerçek STEP için gerekli)'}"
+                f"Gmsh: {'hazır' if gmsh_available() else 'yok — gerçek STEP için kur'}"
             )
+            self.backend_label.setObjectName("muted")
             self.backend_label.setWordWrap(True)
             s1.addWidget(self.backend_label)
             left_l.addWidget(g1)
@@ -146,19 +227,22 @@ def run_desktop() -> int:
             self.tree.setSelectionMode(QTreeWidget.ExtendedSelection)
             self.tree.itemSelectionChanged.connect(self._on_tree_selection)
             self.tree.itemChanged.connect(self._on_tree_item_changed)
+            self.tree.setMinimumHeight(160)
             st.addWidget(self.tree)
             trow = QHBoxLayout()
             btn_hide = QPushButton("Gizle/Göster")
+            btn_hide.setObjectName("secondary")
             btn_hide.clicked.connect(self._toggle_visibility)
             btn_del = QPushButton("Sil")
+            btn_del.setObjectName("secondary")
             btn_del.clicked.connect(self._delete_selected)
             trow.addWidget(btn_hide)
             trow.addWidget(btn_del)
             st.addLayout(trow)
             left_l.addWidget(gtree)
 
-            # 2 Analysis context (for sizing advice)
-            g2 = QGroupBox("2 · Analiz case (size önerisi için)")
+            # 2 Case
+            g2 = QGroupBox("2 · Analiz case")
             f2 = QFormLayout(g2)
             self.analysis = QComboBox()
             self.analysis.addItems(
@@ -174,21 +258,12 @@ def run_desktop() -> int:
             f2.addRow("Solver", self.solver)
             f2.addRow(self.chk_contact)
             f2.addRow(self.chk_thin)
-            btn_advise = QPushButton("Size öner (kaynaklı)")
-            btn_advise.clicked.connect(self._suggest_sizes)
-            f2.addRow(btn_advise)
-            self.advice_box = QTextEdit()
-            self.advice_box.setReadOnly(True)
-            self.advice_box.setMaximumHeight(90)
-            self.advice_box.setPlaceholderText(
-                "Autodesk/ICEMM/MSC/NAFEMS temelli size önerisi…"
-            )
-            f2.addRow(self.advice_box)
             left_l.addWidget(g2)
 
-            # 3 Mesh controls
-            g3 = QGroupBox("3 · Seçili yüzeye mesh")
-            f3 = QFormLayout(g3)
+            # 3 Automation + manual
+            g3 = QGroupBox("3 · Mesh otomasyonu")
+            s3 = QVBoxLayout(g3)
+            f3 = QFormLayout()
             self.element = QComboBox()
             self.element.addItems(["TRI3 (yüzey)", "TET4 (hacim)"])
             self.size_global = QDoubleSpinBox()
@@ -199,22 +274,49 @@ def run_desktop() -> int:
             self.size_local = QDoubleSpinBox()
             self.size_local.setDecimals(6)
             self.size_local.setRange(0.0, 1e3)
-            self.size_local.setSpecialValueText("global")
+            self.size_local.setSpecialValueText("(önerilen)")
             self.size_local.setValue(0.0)
             self.size_local.setSuffix(" m")
             f3.addRow("Eleman", self.element)
             f3.addRow("Global size", self.size_global)
-            f3.addRow("Lokal size (yüzey)", self.size_local)
-            btn_mesh = QPushButton("Seçili yüzeye mesh uygula")
+            f3.addRow("Lokal size", self.size_local)
+            s3.addLayout(f3)
+
+            btn_auto = QPushButton("Otomatik çalıştır")
+            btn_auto.setObjectName("accent")
+            btn_auto.setToolTip(
+                "Özellik tespit → kritik yüzey seç → size öner → mesh → export"
+            )
+            btn_auto.clicked.connect(self._run_automation)
+            s3.addWidget(btn_auto)
+
+            brow = QHBoxLayout()
+            btn_suggest = QPushButton("Sadece size öner")
+            btn_suggest.setObjectName("secondary")
+            btn_suggest.clicked.connect(self._suggest_sizes)
+            btn_mesh = QPushButton("Seçiliye mesh")
+            btn_mesh.setObjectName("secondary")
             btn_mesh.clicked.connect(self._apply_mesh)
-            f3.addRow(btn_mesh)
+            brow.addWidget(btn_suggest)
+            brow.addWidget(btn_mesh)
+            s3.addLayout(brow)
+
             btn_export = QPushButton("Mesh çıktısı…")
+            btn_export.setObjectName("secondary")
             btn_export.clicked.connect(self._export)
-            f3.addRow(btn_export)
+            s3.addWidget(btn_export)
+
+            self.advice_box = QTextEdit()
+            self.advice_box.setReadOnly(True)
+            self.advice_box.setMaximumHeight(100)
+            self.advice_box.setPlaceholderText(
+                "Otomasyon / size gerekçesi (Autodesk·ICEMM·MSC·NAFEMS)…"
+            )
+            s3.addWidget(self.advice_box)
             self.export_label = QLabel("")
+            self.export_label.setObjectName("muted")
             self.export_label.setWordWrap(True)
-            self.export_label.setStyleSheet("font-size:11px;")
-            f3.addRow(self.export_label)
+            s3.addWidget(self.export_label)
             left_l.addWidget(g3)
             left_l.addStretch(1)
 
@@ -225,12 +327,13 @@ def run_desktop() -> int:
                 QMessageBox.critical(self, "3D viewer required", str(exc))
                 raise
 
-            splitter.addWidget(left)
+            splitter.addWidget(scroll)
             splitter.addWidget(self.viewer)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 3)
-            splitter.setSizes([400, 1000])
-            self.statusBar().showMessage(f"Hazır ({mode}) — STEP import ile başla")
+            splitter.setSizes([420, 1020])
+            self.statusBar().showMessage(f"Hazır ({mode})")
+            self._set_rail("Bekleniyor: STEP import", 0)
 
             if os.environ.get("ENGCORE_DESKTOP_AUTOLOAD", "0") == "1":
                 try:
@@ -238,7 +341,10 @@ def run_desktop() -> int:
                 except Exception:
                     pass
 
-        # --- helpers ---
+        def _set_rail(self, text: str, step: int) -> None:
+            self.step_rail.setText(text)
+            self.progress.setValue(max(0, min(5, step)))
+
         def _context(self) -> AnalysisContext:
             return AnalysisContext(
                 analysis_type=self.analysis.currentText(),  # type: ignore[arg-type]
@@ -285,6 +391,7 @@ def run_desktop() -> int:
                     )
                     if ok != QMessageBox.Yes:
                         return
+                self._set_rail("Import…", 0)
                 self._geometry = import_geometry(
                     self._input_path,
                     units=self.units.currentText(),
@@ -304,14 +411,15 @@ def run_desktop() -> int:
                 self._rebuild_tree()
                 self._refresh_view()
                 self.backend_label.setText(
-                    f"Backend: {self._geometry.backend} · Gmsh: "
-                    f"{'hazır' if gmsh_available() else 'yok'}"
+                    f"Backend: {self._geometry.backend} · "
+                    f"{len(self._regions)} yüzey · mesh yok"
                 )
-                self.statusBar().showMessage(
-                    f"Geometri yüklendi (mesh yok): {self._geometry.solid_id} · "
-                    f"{len(self._regions)} yüzey"
+                self._set_rail(
+                    f"Geometri hazır · {self._geometry.solid_id}\n"
+                    "Sonraki: analiz tipini seç → Otomatik çalıştır",
+                    1,
                 )
-                self._suggest_sizes()
+                self.statusBar().showMessage("CAD import tamam — mesh henüz yok")
             except MissingGmshError as exc:
                 QMessageBox.critical(self, "Gmsh gerekli", str(exc))
             except Exception as exc:
@@ -323,14 +431,16 @@ def run_desktop() -> int:
             if self._geometry is None:
                 self.tree.blockSignals(False)
                 return
-            geom = QTreeWidgetItem(["Geometri", "görünür" if self._show_geometry else "gizli"])
+            geom = QTreeWidgetItem(
+                ["Geometri", "görünür" if self._show_geometry else "gizli"]
+            )
             geom.setData(0, ROLE_KIND, "geometry")
             geom.setData(0, ROLE_ID, self._geometry.solid_id)
             geom.setFlags(geom.flags() | Qt.ItemIsUserCheckable)
             geom.setCheckState(0, Qt.Checked if self._show_geometry else Qt.Unchecked)
             self.tree.addTopLevelItem(geom)
 
-            faces_root = QTreeWidgetItem(["Yüzeyler", ""])
+            faces_root = QTreeWidgetItem(["Yüzeyler", f"{len(self._active_regions())}"])
             faces_root.setData(0, ROLE_KIND, "faces_root")
             geom.addChild(faces_root)
             for r in self._active_regions():
@@ -349,7 +459,7 @@ def run_desktop() -> int:
                 if m.mesh_id in self._deleted_meshes:
                     continue
                 hidden = m.mesh_id in self._hidden_meshes
-                label = f"{m.element_type} · {m.n_cells} el · size={m.size_m or '?'}"
+                label = f"{m.element_type} · {m.n_cells} el"
                 item = QTreeWidgetItem([label, "gizli" if hidden else "görünür"])
                 item.setData(0, ROLE_KIND, "mesh")
                 item.setData(0, ROLE_ID, m.mesh_id)
@@ -359,6 +469,18 @@ def run_desktop() -> int:
 
             self.tree.expandAll()
             self.tree.blockSignals(False)
+
+        def _select_faces_in_tree(self, face_ids: tuple[str, ...]) -> None:
+            want = set(face_ids)
+            self.tree.clearSelection()
+            root = self.tree.invisibleRootItem()
+            stack = [root.child(i) for i in range(root.childCount())]
+            while stack:
+                item = stack.pop()
+                for i in range(item.childCount()):
+                    stack.append(item.child(i))
+                if item.data(0, ROLE_KIND) == "face" and item.data(0, ROLE_ID) in want:
+                    item.setSelected(True)
 
         def _refresh_view(self) -> None:
             visible_meshes = [
@@ -403,8 +525,7 @@ def run_desktop() -> int:
 
         def _toggle_visibility(self) -> None:
             for item in self.tree.selectedItems():
-                kind = item.data(0, ROLE_KIND)
-                if kind not in {"geometry", "face", "mesh"}:
+                if item.data(0, ROLE_KIND) not in {"geometry", "face", "mesh"}:
                     continue
                 new_state = Qt.Unchecked if item.checkState(0) == Qt.Checked else Qt.Checked
                 item.setCheckState(0, new_state)
@@ -428,6 +549,75 @@ def run_desktop() -> int:
             self._rebuild_tree()
             self._refresh_view()
 
+        def _run_automation(self) -> None:
+            if self._geometry is None:
+                QMessageBox.information(self, "Geometri yok", "Önce STEP import et.")
+                return
+            et = "TRI3" if self.element.currentIndex() == 0 else "TET4"
+            lines = ["Otomasyon başladı…"]
+
+            def on_progress(step_id: str, status: str, detail: str) -> None:
+                mark = {
+                    "running": "…",
+                    "done": "✓",
+                    "error": "✗",
+                    "skipped": "–",
+                    "pending": "·",
+                }.get(status, "·")
+                step_no = {
+                    "detect_features": 1,
+                    "select_faces": 2,
+                    "recommend_size": 3,
+                    "generate_mesh": 4,
+                    "export": 5,
+                    "done": 5,
+                }.get(step_id, 0)
+                lines.append(f"{mark} {step_id}: {detail}")
+                self._set_rail("\n".join(lines[-6:]), step_no)
+                QApplication.processEvents()
+
+            try:
+                local = float(self.size_local.value()) or None
+                # Prefer current tree selection if user already picked faces
+                sel = self._selected_face_ids() or None
+                result = run_mesh_automation(
+                    self._geometry,
+                    self._context(),
+                    element_type=et,  # type: ignore[arg-type]
+                    out_root=default_output_dir(),
+                    user_global_size_m=float(self.size_global.value()),
+                    user_local_size_m=local,
+                    selected_faces=sel,
+                    progress=on_progress,
+                )
+                self._regions = list(result.regions)
+                self._features = list(result.features)
+                self._brief = result.brief
+                self._meshes.append(result.mesh)
+                self._last_run = result.run
+                self.size_global.setValue(result.size_plan.global_size_m)
+                if result.size_plan.local_size_m:
+                    self.size_local.setValue(result.size_plan.local_size_m)
+                self.advice_box.setPlainText(
+                    result.size_plan.rationale
+                    + "\n\n"
+                    + "\n".join(f"• {c}" for c in result.size_plan.citations)
+                )
+                self._rebuild_tree()
+                self._select_faces_in_tree(result.selected_faces)
+                self._refresh_view()
+                out = result.out_dir / "mesh_export" if result.out_dir else Path(".")
+                self.export_label.setText(
+                    f"Otomasyon çıktı: {out}\n"
+                    f"{result.mesh.element_type} · {result.mesh.n_cells} eleman"
+                )
+                self.statusBar().showMessage(
+                    f"Otomasyon tamam · {result.mesh.element_type} · {result.mesh.n_cells} el"
+                )
+            except Exception as exc:
+                self._set_rail(f"Otomasyon hata: {exc}", self.progress.value())
+                QMessageBox.critical(self, "Otomasyon başarısız", str(exc))
+
         def _suggest_sizes(self) -> None:
             if self._geometry is None:
                 return
@@ -444,11 +634,9 @@ def run_desktop() -> int:
             if plan.local_size_m:
                 self.size_local.setValue(plan.local_size_m)
             self.advice_box.setPlainText(
-                plan.rationale
-                + "\n\nKaynaklar:\n- "
-                + "\n- ".join(plan.citations)
+                plan.rationale + "\n\n" + "\n".join(f"• {c}" for c in plan.citations)
             )
-            # Also keep case brief for volume path
+            self._set_rail("Size önerildi — mesh için Otomatik veya Seçiliye mesh", 3)
             try:
                 self._brief = interpret_analysis_case(
                     self._geometry,
@@ -486,37 +674,32 @@ def run_desktop() -> int:
             mesher = get_mesher(prefer_gmsh=True, geometry=self._geometry)
 
             try:
+                self._set_rail("Manuel mesh…", 4)
                 if et_surface:
                     size = local_size or global_size
-                    if hasattr(mesher, "mesh_surface_tri3"):
-                        kwargs = {
-                            "face_region_ids": faces,
-                            "size_m": size,
-                        }
-                        # synthetic needs regions
-                        try:
-                            mesh = mesher.mesh_surface_tri3(
-                                self._geometry, regions=tuple(self._active_regions()), **kwargs
-                            )
-                        except TypeError:
-                            mesh = mesher.mesh_surface_tri3(self._geometry, **kwargs)
-                    else:
-                        raise RuntimeError("Bu mesher yüzey mesh desteklemiyor.")
+                    try:
+                        mesh = mesher.mesh_surface_tri3(  # type: ignore[attr-defined]
+                            self._geometry,
+                            face_region_ids=faces,
+                            size_m=size,
+                            regions=tuple(self._active_regions()),
+                        )
+                    except TypeError:
+                        mesh = mesher.mesh_surface_tri3(  # type: ignore[attr-defined]
+                            self._geometry, face_region_ids=faces, size_m=size
+                        )
                     self._meshes.append(mesh)
                     self._last_run = None
                     out = (
                         default_output_dir()
                         / f"surf_{datetime.now():%Y%m%d_%H%M%S}_{mesh.mesh_id}"
                     )
-                    paths = export_mesh_model(mesh, out)
-                    self.export_label.setText(
-                        f"Yüzey mesh: {mesh.n_cells} TRI3 → {out.name}"
-                    )
+                    export_mesh_model(mesh, out)
+                    self.export_label.setText(f"Yüzey mesh → {out.name}")
                     self.statusBar().showMessage(
-                        f"Yüzey mesh uygulandı ({size:.4g} m) · {mesh.n_cells} eleman"
+                        f"TRI3 · {mesh.n_cells} el · {size:.4g} m"
                     )
                 else:
-                    # Volume tet with optional local refine on selected faces
                     if self._proposal is None:
                         self._suggest_sizes()
                     base = (
@@ -552,25 +735,21 @@ def run_desktop() -> int:
                     )
                     self._last_run = run
                     self._meshes.append(run.mesh)
-                    paths = export_meshed_geometry(run, out / "mesh_export")
-                    msg = f"Hacim mesh: {run.mesh.n_cells} TET4"
+                    export_meshed_geometry(run, out / "mesh_export")
+                    msg = f"TET4 · {run.mesh.n_cells} el"
                     if review:
                         msg += f" · {review.overall}"
-                    self.export_label.setText(msg + f"\n{out / 'mesh_export'}")
+                    self.export_label.setText(msg)
                     self.statusBar().showMessage(msg)
 
                 self._rebuild_tree()
                 self._refresh_view()
-                _ = paths
+                self._set_rail("Mesh hazır · export isteğe bağlı", 5)
             except Exception as exc:
                 QMessageBox.critical(self, "Mesh başarısız", str(exc))
 
         def _export(self) -> None:
-            visible = [
-                m
-                for m in self._meshes
-                if m.mesh_id not in self._deleted_meshes
-            ]
+            visible = [m for m in self._meshes if m.mesh_id not in self._deleted_meshes]
             if not visible and self._last_run is None:
                 QMessageBox.information(self, "Mesh yok", "Önce mesh uygula.")
                 return

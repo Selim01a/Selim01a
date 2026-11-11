@@ -27,16 +27,30 @@ Produces an `AnalysisCaseBrief`:
 - DEMO geometric quality targets + post-mesh review
 
 ## Automation map (first product)
+
+User supplies **analysis type / solver / flags**. Software automates the rest
+(`engcore.orchestration.automation.run_mesh_automation`):
+
+1. Detect features (holes / thin-wall)
+2. Select critical faces (or keep user selection)
+3. Recommend size (Autodesk / ICEMM / MSC / NAFEMS — `docs/MESH_SIZING.md`)
+4. Generate TRI3 (selected faces) or TET4 (volume + local refine)
+5. Export mesh package
+
+Desktop: **Otomatik çalıştır** button + step progress rail (Workbench-like status).
+
 | Capability | M1 status |
 |------------|-----------|
-| STEP load + view | Yes (surface preview; Gmsh tessellation when available) |
-| Region selection | Yes (CAD faces via Gmsh/OCC, fixture faces, or bbox fallback) |
-| Strategy recommendation from analysis context | Yes (DEMO heuristics) |
-| Feature hints (holes/thin-wall) | Yes (DEMO — fixture metadata + bbox heuristics) |
-| Tet mesh + quality | Yes |
-| Compare mesh behaviours | Yes (table click switches 3D view) |
+| STEP load + view (CAD only, no auto mesh) | Yes |
+| Feature tree hide/show/delete | Yes |
+| Region selection | Yes (CAD / fixture / bbox) |
+| One-click preprocess automation | Yes |
+| Strategy / size recommendation | Yes (DEMO + cited practice) |
+| Feature hints (holes/thin-wall) | Yes (DEMO) |
+| Surface TRI3 on selected faces | Yes |
+| Volume TET4 + quality | Yes |
 | Hex/sweep/multizone | Out of scope |
-| Solver convergence check | Out of scope (needs solver) |
+| Solver convergence check | Out of scope |
 | Classified fillet/chamfer recognition | Next |
 
 ## Desktop
