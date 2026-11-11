@@ -1,0 +1,7 @@
+{
+  "solid_id": "unit-cube",
+  "is_closed_solid": true,
+  "bbox_min": [0.0, 0.0, 0.0],
+  "bbox_max": [1.0, 1.0, 1.0],
+  "volume": 1.0
+}
