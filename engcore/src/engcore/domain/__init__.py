@@ -18,6 +18,7 @@ from engcore.domain.models import (
     RuleDecision,
     RuleStatus,
     Tet4,
+    Tri3,
     UnitPolicy,
     Vec3,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "RuleStatus",
     "StrategyProposal",
     "Tet4",
+    "Tri3",
     "UnitPolicy",
     "Vec3",
 ]

@@ -11,13 +11,13 @@ python -m pip install -e ".[dev,desktop]"
 python -m engcore.desktop
 ```
 
-UI flow (one job): **STEP aç → analiz tipi/case → yüzeylere mesh → meshli geometri çıktısı**.
+UI flow (one job): **STEP import (CAD only) → unsur ağacı / yüzey seç → element+size ile mesh → çıktı**.
 
-1. **STEP seç…** — real `.step` / `.stp` (needs Gmsh; installed with `.[desktop]`)
-2. Set **analiz tipi** + solver hints
-3. **Analiz et ve strateji öner** — case brief + surface-aware strategy
-4. **Mesh üret** — writes `mesh_export/` (JSON + VTK/VTU + STL when available)
-5. Optional **Meshli geometriyi dışa aktar…** to pick a folder
+1. **STEP seç…** — shows **geometry only** (no automatic analysis mesh)
+2. **Unsur ağacı** — geometry / faces / meshes; hide/show/delete
+3. Set analysis case → **Size öner** (Autodesk / ICEMM / MSC / NAFEMS citations — see `docs/MESH_SIZING.md`)
+4. Choose **TRI3 (yüzey)** or **TET4 (hacim)** + global/local size → **Seçili yüzeye mesh uygula**
+5. Export mesh package (JSON + VTK/STL)
 
 The **3D viewer is mandatory** (PySide6 + PyVista + PyVistaQt + Gmsh). Do not set `QT_QPA_PLATFORM=offscreen` on Windows — that breaks OpenGL. The Windows launcher sets `QT_OPENGL=desktop`.
 

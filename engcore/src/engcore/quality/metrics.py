@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from engcore.domain.models import MeshModel, MetricSet, MetricValue, Tet4, Vec3
+from engcore.domain.models import MeshModel, MetricSet, MetricValue, Tet4, Tri3, Vec3
 
 
 def _sub(a: Vec3, b: Vec3) -> Vec3:
@@ -35,14 +35,17 @@ def _edge_lengths(nodes: tuple[Vec3, ...], cell: Tet4) -> list[float]:
 
 class GeometricMetricComputer:
     def compute(self, mesh: MeshModel) -> MetricSet:
-        if mesh.element_type != "TET4":
-            raise ValueError(f"Unsupported element type: {mesh.element_type}")
         if not mesh.cells:
             raise ValueError("Cannot compute metrics on empty mesh.")
+        if mesh.element_type == "TRI3":
+            return self._compute_tri3(mesh)
+        if mesh.element_type != "TET4":
+            raise ValueError(f"Unsupported element type: {mesh.element_type}")
 
         volumes: list[float] = []
         aspects: list[float] = []
         for cell in mesh.cells:
+            assert isinstance(cell, Tet4)
             n0, n1, n2, n3 = (
                 mesh.nodes[cell.n0],
                 mesh.nodes[cell.n1],
@@ -59,10 +62,9 @@ class GeometricMetricComputer:
         max_aspect = max(aspects)
         mean_vol = sum(volumes) / len(volumes)
 
-        # Proxy "jacobian sign health": fraction of positive-orientation tets
-        # using raw signed volume before abs.
         signed = []
         for cell in mesh.cells:
+            assert isinstance(cell, Tet4)
             signed.append(
                 _tet_volume(
                     mesh.nodes[cell.n0],
@@ -112,3 +114,30 @@ class GeometricMetricComputer:
             ),
         )
         return MetricSet(mesh_ref=mesh.mesh_id, metrics=metrics)
+
+    def _compute_tri3(self, mesh: MeshModel) -> MetricSet:
+        areas: list[float] = []
+        aspects: list[float] = []
+        for cell in mesh.cells:
+            assert isinstance(cell, Tri3)
+            a, b, c = mesh.nodes[cell.n0], mesh.nodes[cell.n1], mesh.nodes[cell.n2]
+            area = 0.5 * _norm(_cross(_sub(b, a), _sub(c, a)))
+            areas.append(area)
+            edges = [_norm(_sub(b, a)), _norm(_sub(c, b)), _norm(_sub(a, c))]
+            mn, mx = min(edges), max(edges)
+            aspects.append(mx / mn if mn > 0 else float("inf"))
+        return MetricSet(
+            mesh_ref=mesh.mesh_id,
+            metrics=(
+                MetricValue("min_tri_area", min(areas), "m^2", "Minimum TRI3 area."),
+                MetricValue("mean_tri_area", sum(areas) / len(areas), "m^2", "Mean TRI3 area."),
+                MetricValue(
+                    "max_aspect_ratio",
+                    max(aspects),
+                    "1",
+                    "Max edge-length aspect ratio across TRI3 elements.",
+                ),
+                MetricValue("n_elements", float(len(mesh.cells)), "1", "Number of TRI3 elements."),
+                MetricValue("n_nodes", float(len(mesh.nodes)), "1", "Number of mesh nodes."),
+            ),
+        )

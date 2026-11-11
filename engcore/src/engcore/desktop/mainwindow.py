@@ -1,4 +1,4 @@
-"""PySide6 main window — clear STEP → analysis → mesh → export flow."""
+"""PySide6 main window — STEP geometry → select faces → sized mesh → export."""
 
 from __future__ import annotations
 
@@ -8,10 +8,12 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from engcore.domain.analysis import AnalysisContext
+from engcore.domain.analysis import AnalysisContext, MeshStrategy
+from engcore.domain.models import MeshModel
 from engcore.geometry.factory import MissingGmshError, gmsh_available
 from engcore.geometry.features import detect_feature_hints
 from engcore.geometry.regions import list_regions
+from engcore.meshing.factory import get_mesher
 from engcore.orchestration.pipeline import (
     import_geometry,
     interpret_analysis_case,
@@ -19,7 +21,8 @@ from engcore.orchestration.pipeline import (
     run_with_strategy,
 )
 from engcore.paths import default_output_dir, fixture_dir
-from engcore.reporting.mesh_export import export_meshed_geometry
+from engcore.reporting.mesh_export import export_mesh_model, export_meshed_geometry
+from engcore.standards.mesh_sizing import recommend_sizes
 
 
 def run_desktop() -> int:
@@ -37,18 +40,19 @@ def run_desktop() -> int:
         QApplication,
         QCheckBox,
         QComboBox,
+        QDoubleSpinBox,
         QFileDialog,
         QFormLayout,
         QGroupBox,
         QHBoxLayout,
         QLabel,
-        QListWidget,
-        QListWidgetItem,
         QMainWindow,
         QMessageBox,
         QPushButton,
         QSplitter,
         QTextEdit,
+        QTreeWidget,
+        QTreeWidgetItem,
         QVBoxLayout,
         QWidget,
     )
@@ -56,22 +60,28 @@ def run_desktop() -> int:
     from engcore.desktop.viewer_host import ViewerHost
 
     STEP_FILTER = "STEP files (*.step *.stp);;Fixtures (*.json);;All files (*.*)"
+    ROLE_KIND = Qt.UserRole
+    ROLE_ID = Qt.UserRole + 1
 
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
-            self.setWindowTitle("ENGINEERING//CORE — STEP → mesh")
-            self.resize(1360, 840)
+            self.setWindowTitle("ENGINEERING//CORE — STEP → yüzey mesh")
+            self.resize(1400, 860)
 
             self._geometry = None
-            self._proposal = None
-            self._brief = None
             self._regions = []
             self._features = []
-            self._last_mesh = None
+            self._brief = None
+            self._proposal = None
+            self._meshes: list[MeshModel] = []
             self._last_run = None
-            self._export_paths: dict[str, str] = {}
             self._input_path: Path | None = None
+            self._show_geometry = True
+            self._hidden_regions: set[str] = set()
+            self._hidden_meshes: set[str] = set()
+            self._deleted_regions: set[str] = set()
+            self._deleted_meshes: set[str] = set()
 
             root = QWidget()
             self.setCentralWidget(root)
@@ -81,59 +91,75 @@ def run_desktop() -> int:
             layout.addWidget(splitter)
 
             left = QWidget()
-            left.setMinimumWidth(340)
-            left.setMaximumWidth(420)
+            left.setMinimumWidth(360)
+            left.setMaximumWidth(460)
             left_l = QVBoxLayout(left)
-            left_l.setSpacing(10)
+            left_l.setSpacing(8)
 
-            title = QLabel("STEP → analiz → mesh → çıktı")
+            title = QLabel("STEP → yüzey seç → mesh")
             title_font = QFont()
             title_font.setPointSize(12)
             title_font.setBold(True)
             title.setFont(title_font)
             left_l.addWidget(title)
-            subtitle = QLabel(
-                "Amaç: STEP aç → analiz tipi/case anla → yüzeylere uygun mesh → meshli geometri ver."
+            hint = QLabel(
+                "Import sadece CAD geometri gösterir. Mesh, seçtiğin yüzeye "
+                "element tipi + size ile sonradan uygulanır."
             )
-            subtitle.setWordWrap(True)
-            subtitle.setStyleSheet("color: #555;")
-            left_l.addWidget(subtitle)
+            hint.setWordWrap(True)
+            hint.setStyleSheet("color:#555;")
+            left_l.addWidget(hint)
 
-            # --- 1. Open STEP ---
-            step1 = QGroupBox("1 · STEP dosyası aç")
-            s1 = QVBoxLayout(step1)
-            self.path_label = QLabel("Henüz dosya seçilmedi")
+            # 1 Import
+            g1 = QGroupBox("1 · STEP import")
+            s1 = QVBoxLayout(g1)
+            self.path_label = QLabel("Henüz dosya yok")
             self.path_label.setWordWrap(True)
-            self.path_label.setStyleSheet("font-family: monospace; font-size: 11px;")
+            self.path_label.setStyleSheet("font-family:monospace;font-size:11px;")
             s1.addWidget(self.path_label)
-
             row = QHBoxLayout()
             btn_open = QPushButton("STEP seç…")
-            btn_open.setDefault(True)
             btn_open.clicked.connect(self._browse_step)
-            btn_demo = QPushButton("Demo (plate+hole)")
+            btn_demo = QPushButton("Demo")
             btn_demo.clicked.connect(self._load_demo)
             row.addWidget(btn_open)
             row.addWidget(btn_demo)
             s1.addLayout(row)
-
+            urow = QHBoxLayout()
+            urow.addWidget(QLabel("Birim"))
+            self.units = QComboBox()
+            self.units.addItems(["m", "mm"])
+            urow.addWidget(self.units)
+            s1.addLayout(urow)
             self.backend_label = QLabel(
-                f"Gmsh/OCC: {'hazır' if gmsh_available() else 'yok — gerçek STEP için gerekli'}"
+                f"Gmsh: {'hazır' if gmsh_available() else 'yok (gerçek STEP için gerekli)'}"
             )
             self.backend_label.setWordWrap(True)
             s1.addWidget(self.backend_label)
+            left_l.addWidget(g1)
 
-            units_row = QHBoxLayout()
-            units_row.addWidget(QLabel("Kaynak birim"))
-            self.units = QComboBox()
-            self.units.addItems(["m", "mm"])
-            units_row.addWidget(self.units)
-            s1.addLayout(units_row)
-            left_l.addWidget(step1)
+            # Feature tree
+            gtree = QGroupBox("Unsur ağacı")
+            st = QVBoxLayout(gtree)
+            self.tree = QTreeWidget()
+            self.tree.setHeaderLabels(["Unsur", "Durum"])
+            self.tree.setSelectionMode(QTreeWidget.ExtendedSelection)
+            self.tree.itemSelectionChanged.connect(self._on_tree_selection)
+            self.tree.itemChanged.connect(self._on_tree_item_changed)
+            st.addWidget(self.tree)
+            trow = QHBoxLayout()
+            btn_hide = QPushButton("Gizle/Göster")
+            btn_hide.clicked.connect(self._toggle_visibility)
+            btn_del = QPushButton("Sil")
+            btn_del.clicked.connect(self._delete_selected)
+            trow.addWidget(btn_hide)
+            trow.addWidget(btn_del)
+            st.addLayout(trow)
+            left_l.addWidget(gtree)
 
-            # --- 2. Analysis ---
-            step2 = QGroupBox("2 · Analiz tipi ve case")
-            form = QFormLayout(step2)
+            # 2 Analysis context (for sizing advice)
+            g2 = QGroupBox("2 · Analiz case (size önerisi için)")
+            f2 = QFormLayout(g2)
             self.analysis = QComboBox()
             self.analysis.addItems(
                 ["static_structural", "buckling", "modal", "impact_crash", "thermal"]
@@ -142,58 +168,56 @@ def run_desktop() -> int:
             self.solver.addItems(
                 ["generic_tet", "ansys_mechanical", "ls_dyna", "abaqus", "calculix"]
             )
-            self.chk_contact = QCheckBox("Kontakt bekleniyor")
-            self.chk_thin = QCheckBox("İnce duvar adayı")
-            form.addRow("Analiz tipi", self.analysis)
-            form.addRow("Hedef solver", self.solver)
-            form.addRow(self.chk_contact)
-            form.addRow(self.chk_thin)
-            left_l.addWidget(step2)
+            self.chk_contact = QCheckBox("Kontakt")
+            self.chk_thin = QCheckBox("İnce duvar / bending")
+            f2.addRow("Analiz", self.analysis)
+            f2.addRow("Solver", self.solver)
+            f2.addRow(self.chk_contact)
+            f2.addRow(self.chk_thin)
+            btn_advise = QPushButton("Size öner (kaynaklı)")
+            btn_advise.clicked.connect(self._suggest_sizes)
+            f2.addRow(btn_advise)
+            self.advice_box = QTextEdit()
+            self.advice_box.setReadOnly(True)
+            self.advice_box.setMaximumHeight(90)
+            self.advice_box.setPlaceholderText(
+                "Autodesk/ICEMM/MSC/NAFEMS temelli size önerisi…"
+            )
+            f2.addRow(self.advice_box)
+            left_l.addWidget(g2)
 
-            # --- 3. Surfaces + recommend ---
-            step3 = QGroupBox("3 · Yüzeyler ve mesh stratejisi")
-            s3 = QVBoxLayout(step3)
-            self.region_list = QListWidget()
-            self.region_list.setSelectionMode(QListWidget.MultiSelection)
-            self.region_list.setMaximumHeight(100)
-            self.region_list.itemSelectionChanged.connect(self._on_region_change)
-            s3.addWidget(QLabel("İnce mesh uygulanacak yüzeyler"))
-            s3.addWidget(self.region_list)
-
-            self.case_box = QTextEdit()
-            self.case_box.setReadOnly(True)
-            self.case_box.setMaximumHeight(100)
-            self.case_box.setPlaceholderText("Case yorumu burada görünecek…")
-            s3.addWidget(self.case_box)
-
-            self.strategy_list = QListWidget()
-            self.strategy_list.setMaximumHeight(90)
-            s3.addWidget(QLabel("Önerilen mesh stratejisi"))
-            s3.addWidget(self.strategy_list)
-
-            btn_analyze = QPushButton("Analiz et ve strateji öner")
-            btn_analyze.clicked.connect(self._analyze)
-            s3.addWidget(btn_analyze)
-            left_l.addWidget(step3)
-
-            # --- 4. Mesh + export ---
-            step4 = QGroupBox("4 · Meshle ve çıktı al")
-            s4 = QVBoxLayout(step4)
-            btn_mesh = QPushButton("Mesh üret")
-            btn_mesh.clicked.connect(self._mesh)
-            btn_export = QPushButton("Meshli geometriyi dışa aktar…")
+            # 3 Mesh controls
+            g3 = QGroupBox("3 · Seçili yüzeye mesh")
+            f3 = QFormLayout(g3)
+            self.element = QComboBox()
+            self.element.addItems(["TRI3 (yüzey)", "TET4 (hacim)"])
+            self.size_global = QDoubleSpinBox()
+            self.size_global.setDecimals(6)
+            self.size_global.setRange(1e-6, 1e3)
+            self.size_global.setValue(0.05)
+            self.size_global.setSuffix(" m")
+            self.size_local = QDoubleSpinBox()
+            self.size_local.setDecimals(6)
+            self.size_local.setRange(0.0, 1e3)
+            self.size_local.setSpecialValueText("global")
+            self.size_local.setValue(0.0)
+            self.size_local.setSuffix(" m")
+            f3.addRow("Eleman", self.element)
+            f3.addRow("Global size", self.size_global)
+            f3.addRow("Lokal size (yüzey)", self.size_local)
+            btn_mesh = QPushButton("Seçili yüzeye mesh uygula")
+            btn_mesh.clicked.connect(self._apply_mesh)
+            f3.addRow(btn_mesh)
+            btn_export = QPushButton("Mesh çıktısı…")
             btn_export.clicked.connect(self._export)
-            s4.addWidget(btn_mesh)
-            s4.addWidget(btn_export)
+            f3.addRow(btn_export)
             self.export_label = QLabel("")
             self.export_label.setWordWrap(True)
-            self.export_label.setStyleSheet("color: #333; font-size: 11px;")
-            s4.addWidget(self.export_label)
-            left_l.addWidget(step4)
-
+            self.export_label.setStyleSheet("font-size:11px;")
+            f3.addRow(self.export_label)
+            left_l.addWidget(g3)
             left_l.addStretch(1)
 
-            # --- Center: 3D (ViewerHost is itself a QWidget) ---
             try:
                 self.viewer = ViewerHost()
                 self.viewer.smoke_render()
@@ -205,15 +229,16 @@ def run_desktop() -> int:
             splitter.addWidget(self.viewer)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 3)
-            splitter.setSizes([380, 980])
+            splitter.setSizes([400, 1000])
+            self.statusBar().showMessage(f"Hazır ({mode}) — STEP import ile başla")
 
-            self.statusBar().showMessage(f"Hazır ({mode}) — STEP seçerek başla")
             if os.environ.get("ENGCORE_DESKTOP_AUTOLOAD", "0") == "1":
                 try:
                     self._load_demo()
                 except Exception:
                     pass
 
+        # --- helpers ---
         def _context(self) -> AnalysisContext:
             return AnalysisContext(
                 analysis_type=self.analysis.currentText(),  # type: ignore[arg-type]
@@ -222,39 +247,44 @@ def run_desktop() -> int:
                 thin_wall_candidate=self.chk_thin.isChecked(),
             )
 
-        def _selected_region_ids(self) -> tuple[str, ...]:
-            return tuple(i.data(Qt.UserRole) for i in self.region_list.selectedItems())
+        def _active_regions(self):
+            return [r for r in self._regions if r.region_id not in self._deleted_regions]
+
+        def _selected_face_ids(self) -> tuple[str, ...]:
+            ids: list[str] = []
+            for item in self.tree.selectedItems():
+                if item.data(0, ROLE_KIND) == "face":
+                    rid = item.data(0, ROLE_ID)
+                    if rid and rid not in self._deleted_regions:
+                        ids.append(rid)
+            return tuple(dict.fromkeys(ids))
 
         def _browse_step(self) -> None:
             start = str(self._input_path.parent) if self._input_path else str(Path.home())
-            path, _ = QFileDialog.getOpenFileName(
-                self, "STEP dosyası aç", start, STEP_FILTER
-            )
+            path, _ = QFileDialog.getOpenFileName(self, "STEP aç", start, STEP_FILTER)
             if not path:
                 return
             self._input_path = Path(path)
             self.path_label.setText(str(self._input_path))
-            self._analyze(confirm=True)
+            self._import_geometry(confirm=True)
 
         def _load_demo(self) -> None:
             self._input_path = fixture_dir() / "plate_with_hole.json"
             self.path_label.setText(str(self._input_path))
-            self._analyze(confirm=False)
+            self._import_geometry(confirm=False)
 
-        def _analyze(self, confirm: bool = True) -> None:
+        def _import_geometry(self, confirm: bool = True) -> None:
             if self._input_path is None:
-                QMessageBox.information(self, "STEP yok", "Önce bir STEP dosyası seç.")
                 return
             try:
                 if confirm:
                     ok = QMessageBox.question(
                         self,
                         "Birimleri onayla",
-                        f"Kaynak birim '{self.units.currentText()}' — SI metreye çevrilsin mi?",
+                        f"Kaynak birim '{self.units.currentText()}' → SI m?",
                     )
                     if ok != QMessageBox.Yes:
                         return
-
                 self._geometry = import_geometry(
                     self._input_path,
                     units=self.units.currentText(),
@@ -262,191 +292,303 @@ def run_desktop() -> int:
                     prefer_gmsh=True,
                 )
                 self._regions = list(list_regions(self._geometry))
-                self.region_list.clear()
-                for r in self._regions:
-                    item = QListWidgetItem(f"{r.label} [{r.kind}]")
-                    item.setData(Qt.UserRole, r.region_id)
-                    self.region_list.addItem(item)
-
                 region_ids = tuple(r.region_id for r in self._regions)
                 self._features = list(detect_feature_hints(self._geometry, region_ids))
-                preselect: set[str] = set()
-                for f in self._features:
-                    preselect.update(f.related_region_ids)
-                for i in range(self.region_list.count()):
-                    it = self.region_list.item(i)
-                    if it.data(Qt.UserRole) in preselect:
-                        it.setSelected(True)
-
-                self._brief = interpret_analysis_case(
-                    self._geometry,
-                    self._context(),
-                    regions=tuple(self._regions),
-                    feature_hints=tuple(self._features),
-                    selected_regions=self._selected_region_ids(),
-                )
-                self._fill_case_box()
-                self._proposal = propose_strategies(
-                    self._geometry,
-                    self._context(),
-                    self._selected_region_ids(),
-                    feature_hints=tuple(self._features),
-                    regions=tuple(self._regions),
-                    brief=self._brief,
-                )
-                self._fill_strategies()
-                self._last_mesh = None
+                self._meshes = []
                 self._last_run = None
-                self._export_paths = {}
-                self.export_label.setText("")
-                self._show_geometry()
-                backend = self._geometry.backend
+                self._show_geometry = True
+                self._hidden_regions.clear()
+                self._hidden_meshes.clear()
+                self._deleted_regions.clear()
+                self._deleted_meshes.clear()
+                self._rebuild_tree()
+                self._refresh_view()
                 self.backend_label.setText(
-                    f"Geometri backend: {backend} · "
-                    f"Gmsh: {'hazır' if gmsh_available() else 'yok'}"
+                    f"Backend: {self._geometry.backend} · Gmsh: "
+                    f"{'hazır' if gmsh_available() else 'yok'}"
                 )
                 self.statusBar().showMessage(
-                    f"{self._geometry.solid_id} ({backend}) · "
-                    f"{len(self._regions)} yüzey · case conf={self._brief.confidence:.2f}"
+                    f"Geometri yüklendi (mesh yok): {self._geometry.solid_id} · "
+                    f"{len(self._regions)} yüzey"
                 )
+                self._suggest_sizes()
             except MissingGmshError as exc:
                 QMessageBox.critical(self, "Gmsh gerekli", str(exc))
             except Exception as exc:
-                QMessageBox.critical(self, "Açılış başarısız", str(exc))
+                QMessageBox.critical(self, "Import başarısız", str(exc))
 
-        def _fill_case_box(self) -> None:
-            if not self._brief:
-                self.case_box.setPlainText("")
+        def _rebuild_tree(self) -> None:
+            self.tree.blockSignals(True)
+            self.tree.clear()
+            if self._geometry is None:
+                self.tree.blockSignals(False)
                 return
-            b = self._brief
-            lines = [
-                b.title,
-                b.summary,
-                "",
-                f"Birincil yöntem: {b.primary_method.method_id}",
-                b.primary_method.notes,
-                f"global={b.primary_method.global_size_m:.4g} m"
-                + (
-                    f" · local={b.primary_method.local_size_m:.4g} m"
-                    if b.primary_method.local_size_m
-                    else ""
-                ),
+            geom = QTreeWidgetItem(["Geometri", "görünür" if self._show_geometry else "gizli"])
+            geom.setData(0, ROLE_KIND, "geometry")
+            geom.setData(0, ROLE_ID, self._geometry.solid_id)
+            geom.setFlags(geom.flags() | Qt.ItemIsUserCheckable)
+            geom.setCheckState(0, Qt.Checked if self._show_geometry else Qt.Unchecked)
+            self.tree.addTopLevelItem(geom)
+
+            faces_root = QTreeWidgetItem(["Yüzeyler", ""])
+            faces_root.setData(0, ROLE_KIND, "faces_root")
+            geom.addChild(faces_root)
+            for r in self._active_regions():
+                hidden = r.region_id in self._hidden_regions
+                item = QTreeWidgetItem([r.label, "gizli" if hidden else "görünür"])
+                item.setData(0, ROLE_KIND, "face")
+                item.setData(0, ROLE_ID, r.region_id)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable)
+                item.setCheckState(0, Qt.Unchecked if hidden else Qt.Checked)
+                faces_root.addChild(item)
+
+            meshes_root = QTreeWidgetItem(["Meshler", ""])
+            meshes_root.setData(0, ROLE_KIND, "meshes_root")
+            geom.addChild(meshes_root)
+            for m in self._meshes:
+                if m.mesh_id in self._deleted_meshes:
+                    continue
+                hidden = m.mesh_id in self._hidden_meshes
+                label = f"{m.element_type} · {m.n_cells} el · size={m.size_m or '?'}"
+                item = QTreeWidgetItem([label, "gizli" if hidden else "görünür"])
+                item.setData(0, ROLE_KIND, "mesh")
+                item.setData(0, ROLE_ID, m.mesh_id)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable)
+                item.setCheckState(0, Qt.Unchecked if hidden else Qt.Checked)
+                meshes_root.addChild(item)
+
+            self.tree.expandAll()
+            self.tree.blockSignals(False)
+
+        def _refresh_view(self) -> None:
+            visible_meshes = [
+                m
+                for m in self._meshes
+                if m.mesh_id not in self._deleted_meshes
+                and m.mesh_id not in self._hidden_meshes
             ]
-            if b.missing_inputs:
-                lines.append("Eksik girdi: " + "; ".join(b.missing_inputs[:2]))
-            self.case_box.setPlainText("\n".join(lines))
-
-        def _fill_strategies(self) -> None:
-            self.strategy_list.clear()
-            if not self._proposal:
-                return
-            rec = self._proposal.recommended
-            item = QListWidgetItem(f"★ {rec.name}")
-            item.setData(Qt.UserRole, rec)
-            self.strategy_list.addItem(item)
-            for alt in self._proposal.alternatives:
-                it = QListWidgetItem(f"  {alt.name}")
-                it.setData(Qt.UserRole, alt)
-                self.strategy_list.addItem(it)
-            self.strategy_list.setCurrentRow(0)
-
-        def _show_geometry(self) -> None:
             self.viewer.show_scene(
                 self._geometry,
-                self._last_mesh,
-                regions=self._regions,
-                selected_region_ids=self._selected_region_ids(),
+                meshes=visible_meshes,
+                regions=self._active_regions(),
+                selected_region_ids=self._selected_face_ids(),
+                show_geometry=self._show_geometry,
+                hidden_region_ids=self._hidden_regions,
             )
 
-        def _on_region_change(self) -> None:
+        def _on_tree_selection(self) -> None:
+            self._refresh_view()
+
+        def _on_tree_item_changed(self, item: QTreeWidgetItem, _col: int) -> None:
+            kind = item.data(0, ROLE_KIND)
+            checked = item.checkState(0) == Qt.Checked
+            if kind == "geometry":
+                self._show_geometry = checked
+                item.setText(1, "görünür" if checked else "gizli")
+            elif kind == "face":
+                rid = item.data(0, ROLE_ID)
+                if checked:
+                    self._hidden_regions.discard(rid)
+                else:
+                    self._hidden_regions.add(rid)
+                item.setText(1, "görünür" if checked else "gizli")
+            elif kind == "mesh":
+                mid = item.data(0, ROLE_ID)
+                if checked:
+                    self._hidden_meshes.discard(mid)
+                else:
+                    self._hidden_meshes.add(mid)
+                item.setText(1, "görünür" if checked else "gizli")
+            self._refresh_view()
+
+        def _toggle_visibility(self) -> None:
+            for item in self.tree.selectedItems():
+                kind = item.data(0, ROLE_KIND)
+                if kind not in {"geometry", "face", "mesh"}:
+                    continue
+                new_state = Qt.Unchecked if item.checkState(0) == Qt.Checked else Qt.Checked
+                item.setCheckState(0, new_state)
+
+        def _delete_selected(self) -> None:
+            for item in self.tree.selectedItems():
+                kind = item.data(0, ROLE_KIND)
+                oid = item.data(0, ROLE_ID)
+                if kind == "face" and oid:
+                    self._deleted_regions.add(oid)
+                    self._hidden_regions.discard(oid)
+                elif kind == "mesh" and oid:
+                    self._deleted_meshes.add(oid)
+                    self._meshes = [m for m in self._meshes if m.mesh_id != oid]
+                    self._hidden_meshes.discard(oid)
+                elif kind == "geometry":
+                    self._geometry = None
+                    self._regions = []
+                    self._meshes = []
+                    self._show_geometry = False
+            self._rebuild_tree()
+            self._refresh_view()
+
+        def _suggest_sizes(self) -> None:
             if self._geometry is None:
                 return
-            self._show_geometry()
-
-        def _mesh(self) -> None:
-            if self._geometry is None:
-                QMessageBox.warning(self, "Geometri yok", "Önce STEP aç ve analiz et.")
-                return
-            # Refresh proposal with current region selection / analysis
-            self._brief = interpret_analysis_case(
+            et = "TRI3" if self.element.currentIndex() == 0 else "TET4"
+            plan = recommend_sizes(
                 self._geometry,
                 self._context(),
-                regions=tuple(self._regions),
+                element_type=et,  # type: ignore[arg-type]
                 feature_hints=tuple(self._features),
-                selected_regions=self._selected_region_ids(),
+                regions=tuple(self._active_regions()),
+                selected_region_ids=self._selected_face_ids(),
             )
-            self._fill_case_box()
-            self._proposal = propose_strategies(
-                self._geometry,
-                self._context(),
-                self._selected_region_ids(),
-                feature_hints=tuple(self._features),
-                regions=tuple(self._regions),
-                brief=self._brief,
+            self.size_global.setValue(plan.global_size_m)
+            if plan.local_size_m:
+                self.size_local.setValue(plan.local_size_m)
+            self.advice_box.setPlainText(
+                plan.rationale
+                + "\n\nKaynaklar:\n- "
+                + "\n- ".join(plan.citations)
             )
-            self._fill_strategies()
-
-            item = self.strategy_list.currentItem()
-            if item is None:
-                QMessageBox.warning(self, "Strateji yok", "Önce strateji öner.")
-                return
-            base = item.data(Qt.UserRole)
-            strategy = replace(
-                base,
-                refine_region_ids=self._selected_region_ids() or base.refine_region_ids,
-            )
-            out = (
-                default_output_dir()
-                / f"run_{datetime.now():%Y%m%d_%H%M%S}_{strategy.strategy_id}"
-            )
+            # Also keep case brief for volume path
             try:
-                run, review = run_with_strategy(
+                self._brief = interpret_analysis_case(
                     self._geometry,
-                    strategy,
-                    out,
-                    prefer_gmsh=True,
+                    self._context(),
+                    regions=tuple(self._active_regions()),
+                    feature_hints=tuple(self._features),
+                    selected_regions=self._selected_face_ids(),
+                )
+                self._proposal = propose_strategies(
+                    self._geometry,
+                    self._context(),
+                    self._selected_face_ids(),
+                    feature_hints=tuple(self._features),
+                    regions=tuple(self._active_regions()),
                     brief=self._brief,
                 )
-                self._last_run = run
-                self._last_mesh = run.mesh
-                self._export_paths = export_meshed_geometry(run, out / "mesh_export")
-                self._show_geometry()
-                parts = [f"{k}: {Path(v).name}" for k, v in self._export_paths.items() if k != "manifest"]
-                self.export_label.setText(
-                    f"Çıktı klasörü:\n{out / 'mesh_export'}\n" + " · ".join(parts)
+            except Exception:
+                self._brief = None
+                self._proposal = None
+
+        def _apply_mesh(self) -> None:
+            if self._geometry is None:
+                QMessageBox.warning(self, "Geometri yok", "Önce STEP import et.")
+                return
+            faces = self._selected_face_ids()
+            et_surface = self.element.currentIndex() == 0
+            if et_surface and not faces:
+                QMessageBox.information(
+                    self, "Yüzey seç", "Unsur ağacından en az bir yüzey seç."
                 )
-                msg = f"Mesh: {strategy.name} · {run.mesh.n_nodes} düğüm / {run.mesh.n_cells} hücre"
-                if review:
-                    msg += f" · {review.overall}"
-                self.statusBar().showMessage(msg)
+                return
+
+            global_size = float(self.size_global.value())
+            local_size = float(self.size_local.value()) or None
+            mesher = get_mesher(prefer_gmsh=True, geometry=self._geometry)
+
+            try:
+                if et_surface:
+                    size = local_size or global_size
+                    if hasattr(mesher, "mesh_surface_tri3"):
+                        kwargs = {
+                            "face_region_ids": faces,
+                            "size_m": size,
+                        }
+                        # synthetic needs regions
+                        try:
+                            mesh = mesher.mesh_surface_tri3(
+                                self._geometry, regions=tuple(self._active_regions()), **kwargs
+                            )
+                        except TypeError:
+                            mesh = mesher.mesh_surface_tri3(self._geometry, **kwargs)
+                    else:
+                        raise RuntimeError("Bu mesher yüzey mesh desteklemiyor.")
+                    self._meshes.append(mesh)
+                    self._last_run = None
+                    out = (
+                        default_output_dir()
+                        / f"surf_{datetime.now():%Y%m%d_%H%M%S}_{mesh.mesh_id}"
+                    )
+                    paths = export_mesh_model(mesh, out)
+                    self.export_label.setText(
+                        f"Yüzey mesh: {mesh.n_cells} TRI3 → {out.name}"
+                    )
+                    self.statusBar().showMessage(
+                        f"Yüzey mesh uygulandı ({size:.4g} m) · {mesh.n_cells} eleman"
+                    )
+                else:
+                    # Volume tet with optional local refine on selected faces
+                    if self._proposal is None:
+                        self._suggest_sizes()
+                    base = (
+                        self._proposal.recommended
+                        if self._proposal
+                        else MeshStrategy(
+                            strategy_id="user-tet",
+                            name="User TET4",
+                            element_family="TET4",
+                            global_size_m=global_size,
+                            local_size_m=local_size,
+                            refine_region_ids=faces,
+                            rationale="User-specified sizes",
+                            confidence=0.5,
+                        )
+                    )
+                    strategy = replace(
+                        base,
+                        global_size_m=global_size,
+                        local_size_m=local_size or base.local_size_m,
+                        refine_region_ids=faces or base.refine_region_ids,
+                    )
+                    out = (
+                        default_output_dir()
+                        / f"run_{datetime.now():%Y%m%d_%H%M%S}_{strategy.strategy_id}"
+                    )
+                    run, review = run_with_strategy(
+                        self._geometry,
+                        strategy,
+                        out,
+                        prefer_gmsh=True,
+                        brief=self._brief,
+                    )
+                    self._last_run = run
+                    self._meshes.append(run.mesh)
+                    paths = export_meshed_geometry(run, out / "mesh_export")
+                    msg = f"Hacim mesh: {run.mesh.n_cells} TET4"
+                    if review:
+                        msg += f" · {review.overall}"
+                    self.export_label.setText(msg + f"\n{out / 'mesh_export'}")
+                    self.statusBar().showMessage(msg)
+
+                self._rebuild_tree()
+                self._refresh_view()
+                _ = paths
             except Exception as exc:
                 QMessageBox.critical(self, "Mesh başarısız", str(exc))
 
         def _export(self) -> None:
-            if self._last_run is None:
-                QMessageBox.information(
-                    self, "Mesh yok", "Önce 'Mesh üret' ile mesh oluştur."
-                )
+            visible = [
+                m
+                for m in self._meshes
+                if m.mesh_id not in self._deleted_meshes
+            ]
+            if not visible and self._last_run is None:
+                QMessageBox.information(self, "Mesh yok", "Önce mesh uygula.")
                 return
             dest = QFileDialog.getExistingDirectory(
-                self, "Meshli geometri çıktı klasörü", str(default_output_dir())
+                self, "Mesh çıktı klasörü", str(default_output_dir())
             )
             if not dest:
                 return
             try:
-                paths = export_meshed_geometry(self._last_run, Path(dest))
-                self._export_paths = paths
+                if self._last_run is not None:
+                    paths = export_meshed_geometry(self._last_run, Path(dest))
+                else:
+                    paths = export_mesh_model(visible[-1], Path(dest))
                 self.export_label.setText(
-                    "Dışa aktarıldı:\n"
-                    + "\n".join(f"  {k}: {v}" for k, v in paths.items() if k != "manifest")
+                    "Export:\n"
+                    + "\n".join(f"{k}: {Path(v).name}" for k, v in paths.items())
                 )
-                self.statusBar().showMessage(f"Export tamam → {dest}")
-                QMessageBox.information(
-                    self,
-                    "Export tamam",
-                    "Meshli geometri yazıldı:\n"
-                    + "\n".join(f"• {k.upper()}: {Path(v).name}" for k, v in paths.items() if k != "manifest"),
-                )
+                QMessageBox.information(self, "Export tamam", f"Yazıldı → {dest}")
             except Exception as exc:
                 QMessageBox.critical(self, "Export başarısız", str(exc))
 

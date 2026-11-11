@@ -5,16 +5,39 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from engcore.domain.models import MeshModel, PipelineRun
+from engcore.domain.models import MeshModel, PipelineRun, Tet4, Tri3
 
 
 def export_meshed_geometry(run: PipelineRun, out_dir: Path) -> dict[str, str]:
-    """Write mesh artifacts; returns map of format → path."""
+    """Write mesh artifacts from a pipeline run."""
+    paths = export_mesh_model(run.mesh, out_dir)
+    meta = out_dir / "export_manifest.json"
+    meta.write_text(
+        json.dumps(
+            {
+                "run_id": run.run_id,
+                "solid_id": run.geometry.solid_id,
+                "strategy_id": run.mesh.strategy_id,
+                "overall_status": run.overall_status(),
+                "artifacts": {k: v for k, v in paths.items() if k != "manifest"},
+                "disclaimer": (
+                    "Meshed geometry export is geometric only — not solver-validated."
+                ),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    paths["manifest"] = str(meta.resolve())
+    return paths
+
+
+def export_mesh_model(mesh: MeshModel, out_dir: Path) -> dict[str, str]:
+    """Write a standalone mesh package (JSON + VTK/STL)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     paths: dict[str, str] = {}
 
-    mesh = run.mesh
     json_path = out_dir / "mesh.json"
     json_path.write_text(
         json.dumps(
@@ -25,6 +48,8 @@ def export_meshed_geometry(run: PipelineRun, out_dir: Path) -> dict[str, str]:
                 "element_type": mesh.element_type,
                 "backend": mesh.backend,
                 "strategy_id": mesh.strategy_id,
+                "target_region_ids": list(mesh.target_region_ids),
+                "size_m": mesh.size_m,
                 "units": "m",
                 "n_nodes": mesh.n_nodes,
                 "n_cells": mesh.n_cells,
@@ -42,50 +67,46 @@ def export_meshed_geometry(run: PipelineRun, out_dir: Path) -> dict[str, str]:
         import pyvista as pv
 
         points = np.array([n.as_tuple() for n in mesh.nodes], dtype=float)
-        cells: list[int] = []
-        for c in mesh.cells:
-            cells.extend([4, c.n0, c.n1, c.n2, c.n3])
-        grid = pv.UnstructuredGrid(
-            np.array(cells, dtype=np.int64),
-            np.full(len(mesh.cells), pv.CellType.TETRA, dtype=np.uint8),
-            points,
-        )
-        vtk_path = out_dir / "mesh.vtu"
-        grid.save(str(vtk_path))
-        paths["vtu"] = str(vtk_path.resolve())
-        try:
-            try:
-                surf = grid.extract_surface(algorithm="dataset_surface")
-            except TypeError:
-                surf = grid.extract_surface()
+        if mesh.element_type == "TRI3":
+            faces: list[int] = []
+            for c in mesh.cells:
+                assert isinstance(c, Tri3)
+                faces.extend([3, c.n0, c.n1, c.n2])
+            poly = pv.PolyData(points, np.array(faces, dtype=np.int64))
+            vtk_path = out_dir / "mesh.vtp"
+            poly.save(str(vtk_path))
+            paths["vtp"] = str(vtk_path.resolve())
             stl_path = out_dir / "mesh_surface.stl"
-            surf.save(str(stl_path))
+            poly.save(str(stl_path))
             paths["stl"] = str(stl_path.resolve())
-        except Exception:
-            pass
+        else:
+            cells: list[int] = []
+            for c in mesh.cells:
+                assert isinstance(c, Tet4)
+                cells.extend([4, c.n0, c.n1, c.n2, c.n3])
+            grid = pv.UnstructuredGrid(
+                np.array(cells, dtype=np.int64),
+                np.full(len(mesh.cells), pv.CellType.TETRA, dtype=np.uint8),
+                points,
+            )
+            vtk_path = out_dir / "mesh.vtu"
+            grid.save(str(vtk_path))
+            paths["vtu"] = str(vtk_path.resolve())
+            try:
+                try:
+                    surf = grid.extract_surface(algorithm="dataset_surface")
+                except TypeError:
+                    surf = grid.extract_surface()
+                stl_path = out_dir / "mesh_surface.stl"
+                surf.save(str(stl_path))
+                paths["stl"] = str(stl_path.resolve())
+            except Exception:
+                pass
     except Exception:
         vtk_path = out_dir / "mesh.vtk"
         _write_legacy_vtk(mesh, vtk_path)
         paths["vtk"] = str(vtk_path.resolve())
 
-    meta = out_dir / "export_manifest.json"
-    meta.write_text(
-        json.dumps(
-            {
-                "run_id": run.run_id,
-                "solid_id": run.geometry.solid_id,
-                "strategy_id": mesh.strategy_id,
-                "overall_status": run.overall_status(),
-                "artifacts": paths,
-                "disclaimer": (
-                    "Meshed geometry export is geometric only — not solver-validated."
-                ),
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    paths["manifest"] = str(meta.resolve())
     return paths
 
 
@@ -99,10 +120,20 @@ def _write_legacy_vtk(mesh: MeshModel, path: Path) -> None:
     ]
     for n in mesh.nodes:
         lines.append(f"{n.x} {n.y} {n.z}")
-    cell_size = mesh.n_cells * 5
-    lines.append(f"CELLS {mesh.n_cells} {cell_size}")
-    for c in mesh.cells:
-        lines.append(f"4 {c.n0} {c.n1} {c.n2} {c.n3}")
-    lines.append(f"CELL_TYPES {mesh.n_cells}")
-    lines.extend(["10"] * mesh.n_cells)
+    if mesh.element_type == "TRI3":
+        cell_size = mesh.n_cells * 4
+        lines.append(f"CELLS {mesh.n_cells} {cell_size}")
+        for c in mesh.cells:
+            assert isinstance(c, Tri3)
+            lines.append(f"3 {c.n0} {c.n1} {c.n2}")
+        lines.append(f"CELL_TYPES {mesh.n_cells}")
+        lines.extend(["5"] * mesh.n_cells)  # VTK_TRIANGLE
+    else:
+        cell_size = mesh.n_cells * 5
+        lines.append(f"CELLS {mesh.n_cells} {cell_size}")
+        for c in mesh.cells:
+            assert isinstance(c, Tet4)
+            lines.append(f"4 {c.n0} {c.n1} {c.n2} {c.n3}")
+        lines.append(f"CELL_TYPES {mesh.n_cells}")
+        lines.extend(["10"] * mesh.n_cells)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

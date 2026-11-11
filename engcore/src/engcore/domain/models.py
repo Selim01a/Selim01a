@@ -29,6 +29,18 @@ class Tet4:
 
 
 @dataclass(frozen=True, slots=True)
+class Tri3:
+    """Linear triangle — surface mesh on selected faces."""
+
+    n0: int
+    n1: int
+    n2: int
+
+    def as_tuple(self) -> tuple[int, int, int]:
+        return (self.n0, self.n1, self.n2)
+
+
+@dataclass(frozen=True, slots=True)
 class UnitPolicy:
     """SI metres inside core. Display may use mm."""
 
@@ -63,11 +75,14 @@ class GeometryModel:
 class MeshModel:
     mesh_id: str
     nodes: tuple[Vec3, ...]
-    cells: tuple[Tet4, ...]
+    cells: tuple[Tet4, ...] | tuple[Tri3, ...]
     geometry_ref: str
     backend: Literal["synthetic", "gmsh"]
-    element_type: Literal["TET4"] = "TET4"
+    element_type: Literal["TET4", "TRI3"] = "TET4"
     strategy_id: str | None = None
+    # Faces this mesh was driven by (surface mesh or local refine targets)
+    target_region_ids: tuple[str, ...] = ()
+    size_m: float | None = None
 
     @property
     def n_nodes(self) -> int:

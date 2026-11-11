@@ -7,7 +7,7 @@ from engcore.domain.models import GeometryModel, MeshModel
 from engcore.desktop.viewer import (
     geometry_outline_polydata,
     geometry_surface_polydata,
-    mesh_to_unstructured,
+    mesh_to_polydata_or_grid,
     region_box_polydata,
 )
 
@@ -24,11 +24,7 @@ GL_ERROR_HELP = (
 
 
 def ViewerHost(parent=None):
-    """Return a QWidget hosting the PyVistaQt interactor.
-
-    Implemented as a factory so PySide6 is only imported when the desktop
-    stack is actually launched (keeps headless imports light).
-    """
+    """Return a QWidget hosting the PyVistaQt interactor."""
     from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
     from pyvistaqt import QtInteractor
 
@@ -38,7 +34,8 @@ def ViewerHost(parent=None):
             layout = QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
             self._caption = QLabel(
-                "3D workspace — orbit: left-drag · zoom: scroll · pan: middle/shift-drag"
+                "3D — orbit: left-drag · zoom: scroll · pan: middle/shift-drag  |  "
+                "Import shows CAD geometry only; mesh appears after you apply it."
             )
             layout.addWidget(self._caption)
             self.plotter = QtInteractor(self)
@@ -47,7 +44,6 @@ def ViewerHost(parent=None):
             self._smoke_ok = False
 
         def smoke_render(self) -> None:
-            """Fail fast if OpenGL/Qt interactor cannot render."""
             try:
                 self.plotter.clear()
                 self.plotter.add_axes()
@@ -64,36 +60,66 @@ def ViewerHost(parent=None):
         def show_scene(
             self,
             geometry: GeometryModel | None,
-            mesh: MeshModel | None = None,
+            meshes: list[MeshModel] | None = None,
+            *,
+            mesh: MeshModel | None = None,  # back-compat single mesh
             regions: list[GeometryRegion] | None = None,
             selected_region_ids: tuple[str, ...] = (),
+            show_geometry: bool = True,
+            hidden_region_ids: set[str] | None = None,
+            hidden_mesh_ids: set[str] | None = None,
         ) -> None:
+            hidden_regions = hidden_region_ids or set()
+            hidden_meshes = hidden_mesh_ids or set()
+            mesh_list = list(meshes or [])
+            if mesh is not None:
+                mesh_list.append(mesh)
+
             self.plotter.clear()
             self.plotter.add_axes()
             if geometry is None:
                 self.plotter.render()
                 return
-            try:
-                surf = geometry_surface_polydata(geometry)
-                self.plotter.add_mesh(surf, color="silver", opacity=0.35, show_edges=True)
-            except Exception:
-                outline = geometry_outline_polydata(geometry)
-                self.plotter.add_mesh(
-                    outline, style="wireframe", color="black", line_width=2
-                )
-            if mesh is not None:
-                grid = mesh_to_unstructured(mesh)
-                self.plotter.add_mesh(
-                    grid, show_edges=True, opacity=0.5, color="lightblue"
-                )
+
+            # CAD look: solid shading, NO analysis-mesh edges on the body
+            if show_geometry:
+                try:
+                    surf = geometry_surface_polydata(geometry)
+                    self.plotter.add_mesh(
+                        surf,
+                        color="#C0C4C8",
+                        opacity=0.85,
+                        show_edges=False,
+                        smooth_shading=True,
+                    )
+                except Exception:
+                    outline = geometry_outline_polydata(geometry)
+                    self.plotter.add_mesh(
+                        outline, style="wireframe", color="black", line_width=2
+                    )
+
+            # Selected faces highlight (skip hidden)
             if regions:
-                selected = set(selected_region_ids)
+                selected = set(selected_region_ids) - hidden_regions
                 for r in regions:
                     if r.region_id not in selected:
                         continue
                     box = region_box_polydata(r)
                     if box is not None:
-                        self.plotter.add_mesh(box, color="orange", opacity=0.3)
+                        self.plotter.add_mesh(
+                            box, color="#E67E22", opacity=0.35, show_edges=False
+                        )
+
+            # Analysis meshes only when present and visible
+            for m in mesh_list:
+                if m.mesh_id in hidden_meshes:
+                    continue
+                grid = mesh_to_polydata_or_grid(m)
+                color = "#5DADE2" if m.element_type == "TRI3" else "#85C1E9"
+                self.plotter.add_mesh(
+                    grid, show_edges=True, opacity=0.55, color=color
+                )
+
             self.plotter.reset_camera()
             self.plotter.render()
 
