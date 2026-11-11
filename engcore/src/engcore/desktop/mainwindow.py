@@ -39,7 +39,6 @@ def run_desktop() -> int:
         QComboBox,
         QFileDialog,
         QFormLayout,
-        QFrame,
         QGroupBox,
         QHBoxLayout,
         QLabel,
@@ -194,20 +193,16 @@ def run_desktop() -> int:
 
             left_l.addStretch(1)
 
-            # --- Center: 3D ---
-            center = QFrame()
-            center_l = QVBoxLayout(center)
-            center_l.setContentsMargins(0, 0, 0, 0)
+            # --- Center: 3D (ViewerHost is itself a QWidget) ---
             try:
-                self.viewer = ViewerHost(center)
+                self.viewer = ViewerHost()
                 self.viewer.smoke_render()
-                center_l.addWidget(self.viewer)
             except Exception as exc:
                 QMessageBox.critical(self, "3D viewer required", str(exc))
                 raise
 
             splitter.addWidget(left)
-            splitter.addWidget(center)
+            splitter.addWidget(self.viewer)
             splitter.setStretchFactor(0, 1)
             splitter.setStretchFactor(1, 3)
             splitter.setSizes([380, 980])
