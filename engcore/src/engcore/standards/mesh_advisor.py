@@ -31,6 +31,7 @@ class MeshStrategyAdvisor:
         geometry: GeometryModel,
         context: AnalysisContext,
         selected_regions: tuple[str, ...] = (),
+        feature_hints=(),
     ) -> StrategyProposal:
         context = self.require_context(context)
         char = self._characteristic_length(geometry)
@@ -39,11 +40,27 @@ class MeshStrategyAdvisor:
             "Geometric mesh quality PASS does not imply solver readiness.",
         ]
 
-        refine = selected_regions or context.critical_result_regions
+        auto_regions: list[str] = []
+        for hint in feature_hints:
+            warnings.append(f"Feature [{hint.kind}] {hint.label}: {hint.evidence}")
+            if hint.kind == "hole" and hint.related_region_ids:
+                auto_regions.extend(hint.related_region_ids)
+            if hint.kind == "thin_wall":
+                warnings.append(
+                    "Thin-wall feature hint: consider shell/hybrid — not auto-applied in DEMO."
+                )
+                if not context.thin_wall_candidate:
+                    warnings.append("Tip: enable 'Thin-wall candidate' in analysis context.")
+
+        refine = selected_regions or context.critical_result_regions or tuple(dict.fromkeys(auto_regions))
         if not refine:
             warnings.append(
                 "No critical regions selected; global sizing only. "
                 "Pick faces/regions for local refinement when stress/contact/hotspots matter."
+            )
+        elif not selected_regions and auto_regions:
+            warnings.append(
+                "Using feature-hint regions for local refine (DEMO). Review/override selection."
             )
 
         if context.analysis_type == "impact_crash":

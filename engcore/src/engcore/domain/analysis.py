@@ -86,6 +86,8 @@ class MeshVariantResult:
     max_aspect_ratio: float | None
     overall_rule_status: str
     report_path: str | None = None
+    # Optional in-memory mesh for UI switching (not serialized)
+    mesh: object | None = None
 
 
 @dataclass(slots=True)
@@ -94,3 +96,4 @@ class CompareSession:
     context: AnalysisContext
     selected_regions: list[str] = field(default_factory=list)
     variants: list[MeshVariantResult] = field(default_factory=list)
+    feature_warnings: list[str] = field(default_factory=list)

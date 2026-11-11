@@ -40,8 +40,9 @@ def import_geometry(
     prefer_gmsh: bool = False,
 ):
     unit_policy = make_unit_policy(units, confirm_units)
-    importer = get_geometry_importer(prefer_gmsh=prefer_gmsh)
-    geometry = importer.import_step(Path(input_path), unit_policy)
+    path = Path(input_path)
+    importer = get_geometry_importer(prefer_gmsh=prefer_gmsh, path=path)
+    geometry = importer.import_step(path, unit_policy)
     if not geometry.is_closed_solid:
         raise ValueError("Pipeline aborted: geometry is not a closed solid.")
     return geometry
@@ -51,8 +52,11 @@ def propose_strategies(
     geometry,
     context: AnalysisContext,
     selected_regions: tuple[str, ...] = (),
+    feature_hints=(),
 ) -> StrategyProposal:
-    return MeshStrategyAdvisor().propose(geometry, context, selected_regions)
+    return MeshStrategyAdvisor().propose(
+        geometry, context, selected_regions, feature_hints=feature_hints
+    )
 
 
 def run_with_strategy(
@@ -115,6 +119,7 @@ def compare_strategies(
                 max_aspect_ratio=aspect.value if aspect else None,
                 overall_rule_status=run.overall_status(),
                 report_path=run.artifacts.report_json if run.artifacts else None,
+                mesh=run.mesh,
             )
         )
     return session

@@ -1,6 +1,6 @@
 """Deterministic TET4 mesher for axis-aligned boxes (CI / smoke / demo).
 
-Supports optional local refinement near selected bbox faces so users can
+Supports optional local refinement near selected faces so users can
 compare strategy behaviour without a full CAD topology stack.
 """
 
@@ -31,13 +31,14 @@ class SyntheticMesher:
             raise ValueError("Invalid bounding box for meshing.")
 
         global_size = strategy.global_size_m if strategy else max_size_m
-        n = max(1, int(math.ceil(max(dx, dy, dz) / max(global_size, 1e-9))))
-        n = min(max(n, 1), 12)
+        nx, ny, nz = _axis_counts(dx, dy, dz, global_size)
 
-        # Optional denser grid when local refine requested
         if strategy and strategy.local_size_m and strategy.refine_region_ids:
-            n_local = max(1, int(math.ceil(max(dx, dy, dz) / max(strategy.local_size_m, 1e-9))))
-            n = min(max(n, min(n_local, 14)), 14)
+            lx, ly, lz = _axis_counts(dx, dy, dz, strategy.local_size_m)
+            nx, ny, nz = max(nx, lx), max(ny, ly), max(nz, lz)
+
+        # Soft caps keep demos responsive while still differentiating strategies
+        nx, ny, nz = min(nx, 24), min(ny, 24), min(nz, 16)
 
         nodes: list[Vec3] = []
         index: dict[tuple[int, int, int], int] = {}
@@ -46,8 +47,7 @@ class SyntheticMesher:
             key = (i, j, k)
             if key not in index:
                 index[key] = len(nodes)
-                # Bias spacing toward refined faces (demo heuristic)
-                u, v, w = i / n, j / n, k / n
+                u, v, w = i / nx, j / ny, k / nz
                 if strategy and strategy.refine_region_ids:
                     u, v, w = _bias_uvw(u, v, w, strategy.refine_region_ids)
                 nodes.append(
@@ -60,9 +60,9 @@ class SyntheticMesher:
             return index[key]
 
         cells: list[Tet4] = []
-        for i in range(n):
-            for j in range(n):
-                for k in range(n):
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
                     c000 = node_at(i, j, k)
                     c100 = node_at(i + 1, j, k)
                     c010 = node_at(i, j + 1, k)
@@ -84,7 +84,7 @@ class SyntheticMesher:
 
         sid = strategy.strategy_id if strategy else "default"
         digest = hashlib.sha256(
-            f"{geometry.solid_id}:{geometry.source_sha256}:{n}:{sid}".encode()
+            f"{geometry.solid_id}:{geometry.source_sha256}:{nx}x{ny}x{nz}:{sid}".encode()
         ).hexdigest()[:12]
         return MeshModel(
             mesh_id=f"mesh-{digest}",
@@ -96,26 +96,42 @@ class SyntheticMesher:
         )
 
 
+def _axis_counts(dx: float, dy: float, dz: float, size: float) -> tuple[int, int, int]:
+    size = max(size, 1e-9)
+    return (
+        max(1, int(math.ceil(dx / size))),
+        max(1, int(math.ceil(dy / size))),
+        max(1, int(math.ceil(dz / size))),
+    )
+
+
 def _bias_uvw(u: float, v: float, w: float, regions: tuple[str, ...]) -> tuple[float, float, float]:
-    """Pull parametric coords toward selected bbox faces (smoothstep bias)."""
+    """Pull parametric coords toward selected faces (smoothstep bias)."""
 
     def pull(t: float, toward_zero: bool) -> float:
-        # Stronger clustering near target face
         if toward_zero:
             return t * t
         return 1.0 - (1.0 - t) * (1.0 - t)
 
+    def pull_center(t: float) -> float:
+        return 0.5 + 0.5 * (2.0 * t - 1.0) ** 3
+
     uu, vv, ww = u, v, w
-    if "face-xmin" in regions:
+    names = set(regions)
+    if names & {"face-xmin"}:
         uu = pull(uu, True)
-    if "face-xmax" in regions:
+    if names & {"face-xmax", "side-xpos"}:
         uu = pull(uu, False)
-    if "face-ymin" in regions:
+    if names & {"face-ymin"}:
         vv = pull(vv, True)
-    if "face-ymax" in regions:
+    if names & {"face-ymax"}:
         vv = pull(vv, False)
-    if "face-zmin" in regions:
+    if names & {"face-zmin", "bottom"}:
         ww = pull(ww, True)
-    if "face-zmax" in regions:
+    if names & {"face-zmax", "top"}:
         ww = pull(ww, False)
+    if "hole-wall" in names:
+        uu, vv = pull_center(uu), pull_center(vv)
+    if any(r.startswith("cad-face-") for r in names):
+        uu, vv, ww = pull_center(uu), pull_center(vv), pull_center(ww)
     return uu, vv, ww

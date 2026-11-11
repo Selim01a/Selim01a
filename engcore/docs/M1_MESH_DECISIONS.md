@@ -20,14 +20,15 @@ The software automates **the rest**: sizing proposals, local refine hints, tet g
 ## Automation map (first product)
 | Capability | M1 status |
 |------------|-----------|
-| STEP load + view | Yes (fixture/synthetic outline; Gmsh optional) |
-| Region selection | Yes (bbox faces DEMO) |
+| STEP load + view | Yes (surface preview; Gmsh tessellation when available) |
+| Region selection | Yes (CAD faces via Gmsh/OCC, fixture faces, or bbox fallback) |
 | Strategy recommendation from analysis context | Yes (DEMO heuristics) |
+| Feature hints (holes/thin-wall) | Yes (DEMO — fixture metadata + bbox heuristics) |
 | Tet mesh + quality | Yes |
-| Compare mesh behaviours | Yes |
+| Compare mesh behaviours | Yes (table click switches 3D view) |
 | Hex/sweep/multizone | Out of scope |
 | Solver convergence check | Out of scope (needs solver) |
-| Feature recognition (holes/fillets) | Next |
+| Classified fillet/chamfer recognition | Next |
 
 ## Desktop
 ```bash

@@ -1,0 +1,31 @@
+{
+  "solid_id": "plate-with-hole",
+  "is_closed_solid": true,
+  "bbox_min": [0.0, 0.0, 0.0],
+  "bbox_max": [1.0, 0.6, 0.08],
+  "volume": 0.045,
+  "faces": [
+    {"id": "top", "label": "Top face", "bbox_min": [0.0, 0.0, 0.08], "bbox_max": [1.0, 0.6, 0.08]},
+    {"id": "bottom", "label": "Bottom face", "bbox_min": [0.0, 0.0, 0.0], "bbox_max": [1.0, 0.6, 0.0]},
+    {"id": "hole-wall", "label": "Hole cylindrical wall", "bbox_min": [0.42, 0.22, 0.0], "bbox_max": [0.58, 0.38, 0.08]},
+    {"id": "side-xpos", "label": "Side +X", "bbox_min": [1.0, 0.0, 0.0], "bbox_max": [1.0, 0.6, 0.08]}
+  ],
+  "features": [
+    {
+      "id": "hole-1",
+      "kind": "hole",
+      "label": "Through hole Ø~0.16",
+      "confidence": 0.7,
+      "region_ids": ["hole-wall"],
+      "evidence": "Fixture-declared cylindrical hole (DEMO). Prefer local refine on hole wall for static stress."
+    },
+    {
+      "id": "thin-plate",
+      "kind": "thin_wall",
+      "label": "Thin plate",
+      "confidence": 0.65,
+      "region_ids": ["top", "bottom"],
+      "evidence": "Thickness 0.08 vs planform 1.0×0.6 — shell candidate (DEMO)."
+    }
+  ]
+}

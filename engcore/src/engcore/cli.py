@@ -24,6 +24,8 @@ def _resolve_input(args: argparse.Namespace) -> Path:
             "unit-cube": fixtures / "unit_cube.step",
             "unit-cube-json": fixtures / "unit_cube.json",
             "open-solid": fixtures / "open_solid.json",
+            "plate-with-hole": fixtures / "plate_with_hole.json",
+            "box-occ": fixtures / "box_occ.step",
         }
         if args.fixture not in mapping:
             raise SystemExit(f"Unknown fixture: {args.fixture}. Choose from {list(mapping)}")
@@ -54,7 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("--input", type=Path, help="STEP or fixture JSON path")
         cmd.add_argument(
             "--fixture",
-            choices=["unit-cube", "unit-cube-json", "open-solid"],
+            choices=[
+                "unit-cube",
+                "unit-cube-json",
+                "open-solid",
+                "plate-with-hole",
+                "box-occ",
+            ],
             help="Use bundled synthetic fixture",
         )
         cmd.add_argument("--units", choices=["m", "mm"], default="m")

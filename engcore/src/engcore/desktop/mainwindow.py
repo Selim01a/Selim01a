@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 
 from engcore.domain.analysis import AnalysisContext
+from engcore.geometry.features import detect_feature_hints
+from engcore.geometry.regions import list_regions
 from engcore.orchestration.pipeline import (
     compare_strategies,
     import_geometry,
@@ -14,7 +16,6 @@ from engcore.orchestration.pipeline import (
     run_with_strategy,
 )
 from engcore.paths import default_output_dir, fixture_dir
-from engcore.standards.mesh_advisor import MeshStrategyAdvisor
 
 
 def run_desktop() -> int:
@@ -41,7 +42,6 @@ def run_desktop() -> int:
         QWidget,
     )
 
-    # Prefer offscreen-friendly defaults when no display
     import os
 
     if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
@@ -51,6 +51,7 @@ def run_desktop() -> int:
 
     from engcore.desktop.viewer import (
         geometry_outline_polydata,
+        geometry_surface_polydata,
         mesh_to_unstructured,
         region_box_polydata,
     )
@@ -58,14 +59,16 @@ def run_desktop() -> int:
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
-            self.setWindowTitle("ENGINEERING//CORE M1 — Mesh decision workstation")
+            self.setWindowTitle("ENGINEERING//CORE — Mesh decision workstation")
             self.resize(1280, 800)
 
             self._geometry = None
             self._proposal = None
             self._regions = []
+            self._features = []
             self._last_mesh = None
-            self._input_path = fixture_dir() / "unit_cube.step"
+            self._compare_variants = []
+            self._input_path = fixture_dir() / "plate_with_hole.json"
 
             root = QWidget()
             self.setCentralWidget(root)
@@ -73,34 +76,30 @@ def run_desktop() -> int:
             splitter = QSplitter()
             layout.addWidget(splitter)
 
-            # --- Left controls ---
             left = QWidget()
             left_l = QVBoxLayout(left)
 
-            file_row = QHBoxLayout()
             self.path_label = QLabel(str(self._input_path))
             self.path_label.setWordWrap(True)
-            btn_browse = QPushButton("Browse STEP…")
+            file_row = QHBoxLayout()
+            btn_browse = QPushButton("Browse…")
             btn_browse.clicked.connect(self._browse)
-            btn_fixture = QPushButton("Demo fixture")
-            btn_fixture.clicked.connect(self._load_fixture)
+            btn_plate = QPushButton("Plate+hole")
+            btn_plate.clicked.connect(lambda: self._set_fixture("plate_with_hole.json"))
+            btn_box = QPushButton("OCC box")
+            btn_box.clicked.connect(lambda: self._set_fixture("box_occ.step"))
             file_row.addWidget(btn_browse)
-            file_row.addWidget(btn_fixture)
+            file_row.addWidget(btn_plate)
+            file_row.addWidget(btn_box)
             left_l.addWidget(QLabel("Input"))
             left_l.addWidget(self.path_label)
             left_l.addLayout(file_row)
 
-            ctx_box = QGroupBox("Analysis context (required)")
+            ctx_box = QGroupBox("Analysis context (required — STEP alone is not enough)")
             form = QFormLayout(ctx_box)
             self.analysis = QComboBox()
             self.analysis.addItems(
-                [
-                    "static_structural",
-                    "buckling",
-                    "modal",
-                    "impact_crash",
-                    "thermal",
-                ]
+                ["static_structural", "buckling", "modal", "impact_crash", "thermal"]
             )
             self.solver = QComboBox()
             self.solver.addItems(
@@ -110,18 +109,27 @@ def run_desktop() -> int:
             self.units.addItems(["m", "mm"])
             self.chk_contact = QCheckBox("Expects contact")
             self.chk_thin = QCheckBox("Thin-wall candidate")
+            self.chk_gmsh = QCheckBox("Prefer Gmsh/OCC when available")
+            self.chk_gmsh.setChecked(True)
             form.addRow("Analysis type", self.analysis)
             form.addRow("Target solver", self.solver)
             form.addRow("Source units", self.units)
             form.addRow(self.chk_contact)
             form.addRow(self.chk_thin)
+            form.addRow(self.chk_gmsh)
             left_l.addWidget(ctx_box)
 
-            left_l.addWidget(QLabel("Selectable regions (bbox faces in M1 demo)"))
+            left_l.addWidget(QLabel("Selectable regions (CAD faces or bbox fallback)"))
             self.region_list = QListWidget()
             self.region_list.setSelectionMode(QListWidget.MultiSelection)
-            self.region_list.itemSelectionChanged.connect(self._highlight_regions)
+            self.region_list.itemSelectionChanged.connect(self._on_region_change)
             left_l.addWidget(self.region_list)
+
+            left_l.addWidget(QLabel("Feature hints (DEMO)"))
+            self.feature_box = QTextEdit()
+            self.feature_box.setReadOnly(True)
+            self.feature_box.setMaximumHeight(90)
+            left_l.addWidget(self.feature_box)
 
             btn_load = QPushButton("Load & recommend strategies")
             btn_load.clicked.connect(self._load_and_recommend)
@@ -133,7 +141,7 @@ def run_desktop() -> int:
 
             self.warnings = QTextEdit()
             self.warnings.setReadOnly(True)
-            self.warnings.setMaximumHeight(120)
+            self.warnings.setMaximumHeight(110)
             left_l.addWidget(self.warnings)
 
             btn_apply = QPushButton("Mesh selected strategy")
@@ -143,20 +151,20 @@ def run_desktop() -> int:
             left_l.addWidget(btn_apply)
             left_l.addWidget(btn_compare)
 
-            left_l.addWidget(QLabel("Compare results"))
+            left_l.addWidget(QLabel("Compare results — click a row to view that mesh"))
             self.table = QTableWidget(0, 5)
             self.table.setHorizontalHeaderLabels(
                 ["Strategy", "Nodes", "Cells", "Max aspect", "Rules"]
             )
+            self.table.cellClicked.connect(self._on_variant_clicked)
             left_l.addWidget(self.table)
 
-            # --- Center viewer ---
             center = QWidget()
             center_l = QVBoxLayout(center)
             center_l.addWidget(
                 QLabel(
-                    "3D view — geometry outline / mesh. "
-                    "STEP alone does not decide mesh strategy."
+                    "3D view — surface preview + mesh. "
+                    "Different strategies show different density/behaviour."
                 )
             )
             self.plotter = QtInteractor(center)
@@ -164,13 +172,20 @@ def run_desktop() -> int:
 
             splitter.addWidget(left)
             splitter.addWidget(center)
-            splitter.setStretchFactor(0, 0)
             splitter.setStretchFactor(1, 1)
 
-            self.statusBar().showMessage(
-                "Load geometry, set analysis context, select regions, compare meshes."
-            )
-            self._load_fixture()
+            self.statusBar().showMessage("Ready")
+            # Avoid modal confirm storm on startup in headless; still works interactively
+            if os.environ.get("ENGCORE_DESKTOP_AUTOLOAD", "1") == "1":
+                try:
+                    self._load_and_recommend(confirm=False)
+                except Exception:
+                    pass
+
+        def _set_fixture(self, name: str) -> None:
+            self._input_path = fixture_dir() / name
+            self.path_label.setText(str(self._input_path))
+            self._load_and_recommend()
 
         def _browse(self) -> None:
             path, _ = QFileDialog.getOpenFileName(
@@ -183,11 +198,6 @@ def run_desktop() -> int:
                 self._input_path = Path(path)
                 self.path_label.setText(path)
 
-        def _load_fixture(self) -> None:
-            self._input_path = fixture_dir() / "unit_cube.step"
-            self.path_label.setText(str(self._input_path))
-            self._load_and_recommend()
-
         def _context(self) -> AnalysisContext:
             return AnalysisContext(
                 analysis_type=self.analysis.currentText(),  # type: ignore[arg-type]
@@ -199,36 +209,61 @@ def run_desktop() -> int:
         def _selected_region_ids(self) -> tuple[str, ...]:
             return tuple(i.data(Qt.UserRole) for i in self.region_list.selectedItems())
 
-        def _load_and_recommend(self) -> None:
+        def _load_and_recommend(self, confirm: bool = True) -> None:
             try:
-                ok = QMessageBox.question(
-                    self,
-                    "Confirm units",
-                    f"Confirm source units are '{self.units.currentText()}' "
-                    "and convert to SI metres?",
-                )
-                if ok != QMessageBox.Yes:
-                    return
+                if confirm:
+                    ok = QMessageBox.question(
+                        self,
+                        "Confirm units",
+                        f"Confirm source units are '{self.units.currentText()}' "
+                        "and convert to SI metres?",
+                    )
+                    if ok != QMessageBox.Yes:
+                        return
                 self._geometry = import_geometry(
                     self._input_path,
                     units=self.units.currentText(),
                     confirm_units=True,
+                    prefer_gmsh=self.chk_gmsh.isChecked(),
                 )
-                advisor = MeshStrategyAdvisor()
-                self._regions = list(advisor.default_regions(self._geometry))
+                self._regions = list(list_regions(self._geometry))
                 self.region_list.clear()
                 for r in self._regions:
-                    item = QListWidgetItem(r.label)
+                    item = QListWidgetItem(f"{r.label} [{r.kind}]")
                     item.setData(Qt.UserRole, r.region_id)
                     self.region_list.addItem(item)
 
+                region_ids = tuple(r.region_id for r in self._regions)
+                self._features = list(detect_feature_hints(self._geometry, region_ids))
+                self.feature_box.setPlainText(
+                    "\n".join(
+                        f"• {f.kind}: {f.label} (conf={f.confidence:.2f})\n  {f.evidence}"
+                        for f in self._features
+                    )
+                    or "No feature hints."
+                )
+                # Preselect feature-related regions
+                preselect = set()
+                for f in self._features:
+                    preselect.update(f.related_region_ids)
+                for i in range(self.region_list.count()):
+                    it = self.region_list.item(i)
+                    if it.data(Qt.UserRole) in preselect:
+                        it.setSelected(True)
+
                 self._proposal = propose_strategies(
-                    self._geometry, self._context(), self._selected_region_ids()
+                    self._geometry,
+                    self._context(),
+                    self._selected_region_ids(),
+                    feature_hints=tuple(self._features),
                 )
                 self._fill_strategies()
+                self._last_mesh = None
+                self._compare_variants = []
                 self._show_geometry()
                 self.statusBar().showMessage(
-                    f"Loaded {self._geometry.solid_id} — strategies recommended"
+                    f"Loaded {self._geometry.solid_id} via {self._geometry.backend} "
+                    f"({len(self._regions)} regions)"
                 )
             except Exception as exc:
                 QMessageBox.critical(self, "Load failed", str(exc))
@@ -247,35 +282,39 @@ def run_desktop() -> int:
                 self.strategy_list.addItem(it)
             self.strategy_list.setCurrentRow(0)
             self.warnings.setPlainText(
-                "\n".join(self._proposal.warnings)
-                + "\n\n"
-                + rec.rationale
+                "\n".join(self._proposal.warnings) + "\n\n" + rec.rationale
             )
 
         def _show_geometry(self) -> None:
             self.plotter.clear()
             if self._geometry is None:
                 return
-            outline = geometry_outline_polydata(self._geometry)
-            self.plotter.add_mesh(outline, style="wireframe", color="black", line_width=2)
+            try:
+                surf = geometry_surface_polydata(self._geometry)
+                self.plotter.add_mesh(surf, color="silver", opacity=0.35, show_edges=True)
+            except Exception:
+                outline = geometry_outline_polydata(self._geometry)
+                self.plotter.add_mesh(outline, style="wireframe", color="black", line_width=2)
             if self._last_mesh is not None:
                 grid = mesh_to_unstructured(self._last_mesh)
-                self.plotter.add_mesh(grid, show_edges=True, opacity=0.55, color="lightblue")
-            self._highlight_regions()
+                self.plotter.add_mesh(grid, show_edges=True, opacity=0.5, color="lightblue")
+            self._draw_region_overlays()
             self.plotter.reset_camera()
 
-        def _highlight_regions(self) -> None:
-            # Re-draw selection overlays
-            if self._geometry is None:
-                return
-            # Keep base meshes; add translucent region boxes
+        def _draw_region_overlays(self) -> None:
             selected = set(self._selected_region_ids())
             for r in self._regions:
                 if r.region_id not in selected:
                     continue
                 box = region_box_polydata(r)
                 if box is not None:
-                    self.plotter.add_mesh(box, color="orange", opacity=0.25, name=r.region_id)
+                    self.plotter.add_mesh(box, color="orange", opacity=0.3)
+
+        def _on_region_change(self) -> None:
+            if self._geometry is None:
+                return
+            # Refresh overlays without clearing mesh if possible
+            self._show_geometry()
 
         def _mesh_selected(self) -> None:
             if self._geometry is None:
@@ -285,11 +324,10 @@ def run_desktop() -> int:
             if item is None:
                 QMessageBox.warning(self, "No strategy", "Select a strategy.")
                 return
-            strategy = item.data(Qt.UserRole)
-            regions = self._selected_region_ids()
             strategy = replace(
-                strategy,
-                refine_region_ids=regions or strategy.refine_region_ids,
+                item.data(Qt.UserRole),
+                refine_region_ids=self._selected_region_ids()
+                or item.data(Qt.UserRole).refine_region_ids,
             )
             out = default_output_dir() / f"run_{datetime.now():%Y%m%d_%H%M%S}_{strategy.strategy_id}"
             try:
@@ -299,21 +337,18 @@ def run_desktop() -> int:
                 self.statusBar().showMessage(
                     f"{strategy.name}: {run.mesh.n_cells} cells → {out}"
                 )
-                QMessageBox.information(
-                    self,
-                    "Meshed",
-                    f"{run.overall_status()}\ncells={run.mesh.n_cells}\n{out}",
-                )
             except Exception as exc:
                 QMessageBox.critical(self, "Mesh failed", str(exc))
 
         def _compare(self) -> None:
-            if self._geometry is None or self._proposal is None:
-                QMessageBox.warning(self, "Missing state", "Load & recommend first.")
+            if self._geometry is None:
+                QMessageBox.warning(self, "Missing state", "Load first.")
                 return
-            # Re-propose with current selections
             self._proposal = propose_strategies(
-                self._geometry, self._context(), self._selected_region_ids()
+                self._geometry,
+                self._context(),
+                self._selected_region_ids(),
+                feature_hints=tuple(self._features),
             )
             self._fill_strategies()
             strategies = [self._proposal.recommended, *self._proposal.alternatives]
@@ -326,6 +361,7 @@ def run_desktop() -> int:
                     out,
                     selected_regions=list(self._selected_region_ids()),
                 )
+                self._compare_variants = list(session.variants)
                 self.table.setRowCount(0)
                 for v in session.variants:
                     row = self.table.rowCount()
@@ -339,17 +375,26 @@ def run_desktop() -> int:
                     ]
                     for col, val in enumerate(vals):
                         self.table.setItem(row, col, QTableWidgetItem(val))
-                # Show recommended mesh
-                from engcore.meshing.synthetic import SyntheticMesher
-
-                self._last_mesh = SyntheticMesher().mesh_tet4(
-                    self._geometry,
-                    strategy=self._proposal.recommended,
-                )
+                if session.variants and session.variants[0].mesh is not None:
+                    self._last_mesh = session.variants[0].mesh
                 self._show_geometry()
-                self.statusBar().showMessage(f"Compared {len(session.variants)} strategies → {out}")
+                self.statusBar().showMessage(
+                    f"Compared {len(session.variants)} strategies — click a row to switch view → {out}"
+                )
             except Exception as exc:
                 QMessageBox.critical(self, "Compare failed", str(exc))
+
+        def _on_variant_clicked(self, row: int, _col: int) -> None:
+            if row < 0 or row >= len(self._compare_variants):
+                return
+            variant = self._compare_variants[row]
+            if variant.mesh is not None:
+                self._last_mesh = variant.mesh
+                self._show_geometry()
+                self.statusBar().showMessage(
+                    f"Viewing {variant.strategy.name}: "
+                    f"{variant.n_nodes} nodes / {variant.n_cells} cells"
+                )
 
     app = QApplication.instance() or QApplication([])
     win = MainWindow()
