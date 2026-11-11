@@ -12,6 +12,7 @@ from engcore.geometry.regions import list_regions
 from engcore.orchestration.pipeline import (
     compare_strategies,
     import_geometry,
+    interpret_analysis_case,
     propose_strategies,
     run_with_strategy,
 )
@@ -64,6 +65,7 @@ def run_desktop() -> int:
 
             self._geometry = None
             self._proposal = None
+            self._brief = None
             self._regions = []
             self._features = []
             self._last_mesh = None
@@ -128,8 +130,14 @@ def run_desktop() -> int:
             left_l.addWidget(QLabel("Feature hints (DEMO)"))
             self.feature_box = QTextEdit()
             self.feature_box.setReadOnly(True)
-            self.feature_box.setMaximumHeight(90)
+            self.feature_box.setMaximumHeight(70)
             left_l.addWidget(self.feature_box)
+
+            left_l.addWidget(QLabel("Case interpretation"))
+            self.case_box = QTextEdit()
+            self.case_box.setReadOnly(True)
+            self.case_box.setMaximumHeight(120)
+            left_l.addWidget(self.case_box)
 
             btn_load = QPushButton("Load & recommend strategies")
             btn_load.clicked.connect(self._load_and_recommend)
@@ -251,11 +259,21 @@ def run_desktop() -> int:
                     if it.data(Qt.UserRole) in preselect:
                         it.setSelected(True)
 
+                self._brief = interpret_analysis_case(
+                    self._geometry,
+                    self._context(),
+                    regions=tuple(self._regions),
+                    feature_hints=tuple(self._features),
+                    selected_regions=self._selected_region_ids(),
+                )
+                self._fill_case_box()
                 self._proposal = propose_strategies(
                     self._geometry,
                     self._context(),
                     self._selected_region_ids(),
                     feature_hints=tuple(self._features),
+                    regions=tuple(self._regions),
+                    brief=self._brief,
                 )
                 self._fill_strategies()
                 self._last_mesh = None
@@ -263,10 +281,32 @@ def run_desktop() -> int:
                 self._show_geometry()
                 self.statusBar().showMessage(
                     f"Loaded {self._geometry.solid_id} via {self._geometry.backend} "
-                    f"({len(self._regions)} regions)"
+                    f"({len(self._regions)} regions) · case conf={self._brief.confidence:.2f}"
                 )
             except Exception as exc:
                 QMessageBox.critical(self, "Load failed", str(exc))
+
+        def _fill_case_box(self) -> None:
+            if not self._brief:
+                self.case_box.setPlainText("")
+                return
+            b = self._brief
+            lines = [
+                b.title,
+                b.summary,
+                "",
+                "Primary method: " + b.primary_method.method_id,
+                b.primary_method.notes,
+                f"global={b.primary_method.global_size_m:.4g} m"
+                + (
+                    f" local={b.primary_method.local_size_m:.4g} m"
+                    if b.primary_method.local_size_m
+                    else ""
+                ),
+            ]
+            if b.missing_inputs:
+                lines.append("Missing: " + "; ".join(b.missing_inputs[:3]))
+            self.case_box.setPlainText("\n".join(lines))
 
         def _fill_strategies(self) -> None:
             self.strategy_list.clear()
@@ -281,9 +321,9 @@ def run_desktop() -> int:
                 it.setData(Qt.UserRole, alt)
                 self.strategy_list.addItem(it)
             self.strategy_list.setCurrentRow(0)
-            self.warnings.setPlainText(
-                "\n".join(self._proposal.warnings) + "\n\n" + rec.rationale
-            )
+            # Keep warnings shorter in UI — full case is above
+            short = [w for w in self._proposal.warnings if w.startswith("Missing") or w.startswith("Solver") or "DEMO" in w]
+            self.warnings.setPlainText("\n".join(short[:8]) + "\n\n" + rec.rationale)
 
         def _show_geometry(self) -> None:
             self.plotter.clear()
@@ -331,12 +371,16 @@ def run_desktop() -> int:
             )
             out = default_output_dir() / f"run_{datetime.now():%Y%m%d_%H%M%S}_{strategy.strategy_id}"
             try:
-                run = run_with_strategy(self._geometry, strategy, out)
+                run, review = run_with_strategy(
+                    self._geometry, strategy, out, brief=self._brief
+                )
                 self._last_mesh = run.mesh
                 self._show_geometry()
-                self.statusBar().showMessage(
-                    f"{strategy.name}: {run.mesh.n_cells} cells → {out}"
-                )
+                msg = f"{strategy.name}: {run.mesh.n_cells} cells → {out}"
+                if review:
+                    msg += f" · {review.overall}"
+                    self.warnings.setPlainText(review.narrative)
+                self.statusBar().showMessage(msg)
             except Exception as exc:
                 QMessageBox.critical(self, "Mesh failed", str(exc))
 
@@ -344,11 +388,21 @@ def run_desktop() -> int:
             if self._geometry is None:
                 QMessageBox.warning(self, "Missing state", "Load first.")
                 return
+            self._brief = interpret_analysis_case(
+                self._geometry,
+                self._context(),
+                regions=tuple(self._regions),
+                feature_hints=tuple(self._features),
+                selected_regions=self._selected_region_ids(),
+            )
+            self._fill_case_box()
             self._proposal = propose_strategies(
                 self._geometry,
                 self._context(),
                 self._selected_region_ids(),
                 feature_hints=tuple(self._features),
+                regions=tuple(self._regions),
+                brief=self._brief,
             )
             self._fill_strategies()
             strategies = [self._proposal.recommended, *self._proposal.alternatives]
@@ -360,6 +414,7 @@ def run_desktop() -> int:
                     strategies,
                     out,
                     selected_regions=list(self._selected_region_ids()),
+                    brief=self._brief,
                 )
                 self._compare_variants = list(session.variants)
                 self.table.setRowCount(0)

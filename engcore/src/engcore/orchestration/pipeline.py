@@ -1,4 +1,4 @@
-"""End-to-end pipeline: STEP → context → strategy → mesh → metrics → export."""
+"""End-to-end pipeline: STEP → case interpret → strategy → mesh → review."""
 
 from __future__ import annotations
 
@@ -8,15 +8,19 @@ from pathlib import Path
 from engcore.domain.analysis import (
     AnalysisContext,
     CompareSession,
+    GeometryRegion,
     MeshStrategy,
     MeshVariantResult,
     StrategyProposal,
 )
+from engcore.domain.case_brief import AnalysisCaseBrief, CaseMeshReview
 from engcore.domain.models import PipelineRun, UnitPolicy
 from engcore.geometry.factory import get_geometry_importer
+from engcore.geometry.features import FeatureHint
 from engcore.meshing.factory import get_mesher
 from engcore.quality.metrics import GeometricMetricComputer
 from engcore.reporting.exporter import JsonReportExporter
+from engcore.standards.case_review import review_mesh_against_case
 from engcore.standards.engine import SafeRuleEngine
 from engcore.standards.mesh_advisor import MeshStrategyAdvisor
 
@@ -48,14 +52,38 @@ def import_geometry(
     return geometry
 
 
+def interpret_analysis_case(
+    geometry,
+    context: AnalysisContext,
+    *,
+    regions: tuple[GeometryRegion, ...] = (),
+    feature_hints: tuple[FeatureHint, ...] = (),
+    selected_regions: tuple[str, ...] = (),
+) -> AnalysisCaseBrief:
+    return MeshStrategyAdvisor().interpret_case(
+        geometry,
+        context,
+        regions=regions,
+        feature_hints=feature_hints,
+        selected_regions=selected_regions,
+    )
+
+
 def propose_strategies(
     geometry,
     context: AnalysisContext,
     selected_regions: tuple[str, ...] = (),
     feature_hints=(),
+    regions: tuple[GeometryRegion, ...] = (),
+    brief: AnalysisCaseBrief | None = None,
 ) -> StrategyProposal:
     return MeshStrategyAdvisor().propose(
-        geometry, context, selected_regions, feature_hints=feature_hints
+        geometry,
+        context,
+        selected_regions,
+        feature_hints=feature_hints,
+        regions=regions,
+        brief=brief,
     )
 
 
@@ -65,13 +93,13 @@ def run_with_strategy(
     out_dir: Path,
     *,
     prefer_gmsh: bool = False,
-) -> PipelineRun:
+    brief: AnalysisCaseBrief | None = None,
+) -> tuple[PipelineRun, CaseMeshReview | None]:
     mesher = get_mesher(prefer_gmsh=prefer_gmsh)
     metrics_computer = GeometricMetricComputer()
     rules = SafeRuleEngine()
     exporter = JsonReportExporter()
 
-    # Synthetic mesher accepts strategy; gmsh mesher ignores unknown kw for now
     try:
         mesh = mesher.mesh_tet4(geometry, max_size_m=strategy.global_size_m, strategy=strategy)
     except TypeError:
@@ -87,7 +115,10 @@ def run_with_strategy(
         decisions=decisions,
     )
     run.artifacts = exporter.export(run, Path(out_dir))
-    return run
+    review = None
+    if brief is not None:
+        review = review_mesh_against_case(brief, metrics, method_id=strategy.strategy_id)
+    return run, review
 
 
 def compare_strategies(
@@ -98,6 +129,7 @@ def compare_strategies(
     *,
     selected_regions: list[str] | None = None,
     prefer_gmsh: bool = False,
+    brief: AnalysisCaseBrief | None = None,
 ) -> CompareSession:
     session = CompareSession(
         geometry_id=geometry.solid_id,
@@ -106,7 +138,9 @@ def compare_strategies(
     )
     for strategy in strategies:
         out_dir = Path(out_root) / strategy.strategy_id
-        run = run_with_strategy(geometry, strategy, out_dir, prefer_gmsh=prefer_gmsh)
+        run, review = run_with_strategy(
+            geometry, strategy, out_dir, prefer_gmsh=prefer_gmsh, brief=brief
+        )
         min_vol = run.metrics.get("min_tet_volume")
         aspect = run.metrics.get("max_aspect_ratio")
         session.variants.append(
@@ -122,6 +156,8 @@ def compare_strategies(
                 mesh=run.mesh,
             )
         )
+        if review is not None:
+            session.feature_warnings.append(review.narrative)
     return session
 
 
@@ -140,9 +176,15 @@ def run_pipeline(
     geometry = import_geometry(
         input_path, units=units, confirm_units=confirm_units, prefer_gmsh=prefer_gmsh
     )
+    brief = None
     if strategy is None:
         if context is not None:
-            proposal = propose_strategies(geometry, context, selected_regions)
+            brief = interpret_analysis_case(
+                geometry, context, selected_regions=selected_regions
+            )
+            proposal = propose_strategies(
+                geometry, context, selected_regions, brief=brief
+            )
             strategy = proposal.recommended
         else:
             strategy = MeshStrategy(
@@ -155,4 +197,7 @@ def run_pipeline(
                 rationale="No analysis context — size-only path (not recommended).",
                 confidence=0.2,
             )
-    return run_with_strategy(geometry, strategy, out_dir, prefer_gmsh=prefer_gmsh)
+    run, _review = run_with_strategy(
+        geometry, strategy, out_dir, prefer_gmsh=prefer_gmsh, brief=brief
+    )
+    return run

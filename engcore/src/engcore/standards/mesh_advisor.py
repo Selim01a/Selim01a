@@ -1,7 +1,7 @@
 """Engineering decision engine for mesh strategy recommendations.
 
-DEMO heuristics only. Does not claim solver readiness. STEP-only decisions
-are refused — AnalysisContext is mandatory.
+Builds on CaseInterpreter: analysis case → method plan → MeshStrategy options.
+DEMO heuristics only. Does not claim solver readiness.
 """
 
 from __future__ import annotations
@@ -12,11 +12,17 @@ from engcore.domain.analysis import (
     MeshStrategy,
     StrategyProposal,
 )
+from engcore.domain.case_brief import AnalysisCaseBrief, MeshMethodPlan
 from engcore.domain.models import GeometryModel
+from engcore.geometry.features import FeatureHint
+from engcore.standards.case_interpreter import CaseInterpreter
 
 
 class MeshStrategyAdvisor:
-    """Recommend tet strategies from analysis context + optional region picks."""
+    """Recommend tet strategies from an interpreted analysis case."""
+
+    def __init__(self) -> None:
+        self._interpreter = CaseInterpreter()
 
     def require_context(self, context: AnalysisContext | None) -> AnalysisContext:
         if context is None or context.analysis_type == "unknown":
@@ -26,193 +32,62 @@ class MeshStrategyAdvisor:
             )
         return context
 
+    def interpret_case(
+        self,
+        geometry: GeometryModel,
+        context: AnalysisContext,
+        *,
+        regions: tuple[GeometryRegion, ...] = (),
+        feature_hints: tuple[FeatureHint, ...] = (),
+        selected_regions: tuple[str, ...] = (),
+    ) -> AnalysisCaseBrief:
+        context = self.require_context(context)
+        return self._interpreter.interpret(
+            geometry,
+            context,
+            regions=regions,
+            feature_hints=feature_hints,
+            selected_regions=selected_regions,
+        )
+
     def propose(
         self,
         geometry: GeometryModel,
         context: AnalysisContext,
         selected_regions: tuple[str, ...] = (),
-        feature_hints=(),
+        feature_hints: tuple[FeatureHint, ...] = (),
+        regions: tuple[GeometryRegion, ...] = (),
+        brief: AnalysisCaseBrief | None = None,
     ) -> StrategyProposal:
         context = self.require_context(context)
-        char = self._characteristic_length(geometry)
+        brief = brief or self.interpret_case(
+            geometry,
+            context,
+            regions=regions,
+            feature_hints=feature_hints,
+            selected_regions=selected_regions,
+        )
+
         warnings: list[str] = [
-            "DEMO heuristics — not an APPROVED engineering standard.",
+            "DEMO methodology — not an APPROVED engineering standard.",
             "Geometric mesh quality PASS does not imply solver readiness.",
+            f"Case confidence={brief.confidence:.2f}: {brief.summary}",
         ]
+        warnings.extend(f"Physics: {p}" for p in brief.physics_drivers)
+        warnings.extend(f"Mesh driver: {m}" for m in brief.mesh_drivers)
+        warnings.extend(f"Missing input: {m}" for m in brief.missing_inputs)
+        warnings.extend(f"Solver note: {s}" for s in brief.solver_notes)
 
-        auto_regions: list[str] = []
-        for hint in feature_hints:
-            warnings.append(f"Feature [{hint.kind}] {hint.label}: {hint.evidence}")
-            if hint.kind == "hole" and hint.related_region_ids:
-                auto_regions.extend(hint.related_region_ids)
-            if hint.kind == "thin_wall":
-                warnings.append(
-                    "Thin-wall feature hint: consider shell/hybrid — not auto-applied in DEMO."
-                )
-                if not context.thin_wall_candidate:
-                    warnings.append("Tip: enable 'Thin-wall candidate' in analysis context.")
-
-        refine = selected_regions or context.critical_result_regions or tuple(dict.fromkeys(auto_regions))
-        if not refine:
-            warnings.append(
-                "No critical regions selected; global sizing only. "
-                "Pick faces/regions for local refinement when stress/contact/hotspots matter."
-            )
-        elif not selected_regions and auto_regions:
-            warnings.append(
-                "Using feature-hint regions for local refine (DEMO). Review/override selection."
-            )
-
-        if context.analysis_type == "impact_crash":
-            if context.solver_target not in {"ls_dyna", "generic_tet"}:
-                warnings.append(
-                    f"Crash/impact often targets explicit solvers; "
-                    f"current target is '{context.solver_target}'."
-                )
-            recommended = MeshStrategy(
-                strategy_id="crash-fine-tet",
-                name="Crash / impact — fine TET4 + local refine",
-                element_family="TET4",
-                global_size_m=max(char / 12.0, char * 0.04),
-                local_size_m=max(char / 24.0, char * 0.02),
-                refine_region_ids=refine,
-                rationale=(
-                    "Explicit dynamics needs smaller elements near contact/impact zones; "
-                    "global fill stays coarser to limit cost."
-                ),
-                confidence=0.55,
-            )
-            alternatives = (
-                MeshStrategy(
-                    strategy_id="crash-uniform-fine",
-                    name="Uniform fine TET4 (expensive)",
-                    element_family="TET4",
-                    global_size_m=max(char / 16.0, char * 0.03),
-                    local_size_m=None,
-                    refine_region_ids=(),
-                    rationale="Uniform fine mesh — simpler, costly, little locality.",
-                    confidence=0.35,
-                ),
-            )
-        elif context.analysis_type == "buckling":
-            recommended = MeshStrategy(
-                strategy_id="buckling-mid-tet",
-                name="Buckling — medium TET4, refine slender faces",
-                element_family="TET4",
-                global_size_m=max(char / 8.0, char * 0.06),
-                local_size_m=max(char / 16.0, char * 0.03) if refine else None,
-                refine_region_ids=refine,
-                rationale=(
-                    "Buckling needs adequate resolution of wavelength / thin features; "
-                    "local refine on selected faces if provided."
-                ),
-                confidence=0.5,
-            )
-            alternatives = (
-                MeshStrategy(
-                    strategy_id="buckling-coarse",
-                    name="Coarse survey mesh",
-                    element_family="TET4",
-                    global_size_m=max(char / 4.0, char * 0.12),
-                    local_size_m=None,
-                    refine_region_ids=(),
-                    rationale="Quick survey only — not for eigenvalue convergence claims.",
-                    confidence=0.25,
-                ),
-            )
-        elif context.analysis_type == "thermal":
-            recommended = MeshStrategy(
-                strategy_id="thermal-grad-tet",
-                name="Thermal — gradient-aware TET4",
-                element_family="TET4",
-                global_size_m=max(char / 8.0, char * 0.07),
-                local_size_m=max(char / 20.0, char * 0.025) if refine else None,
-                refine_region_ids=refine,
-                rationale=(
-                    "Refine near heated/cooled surfaces (selected regions); "
-                    "STEP does not encode BCs or conductivity."
-                ),
-                confidence=0.5,
-            )
-            alternatives = (
-                MeshStrategy(
-                    strategy_id="thermal-uniform",
-                    name="Uniform thermal TET4",
-                    element_family="TET4",
-                    global_size_m=max(char / 10.0, char * 0.05),
-                    local_size_m=None,
-                    refine_region_ids=(),
-                    rationale="No BC regions known — uniform sizing.",
-                    confidence=0.3,
-                ),
-            )
-        elif context.analysis_type == "modal":
-            recommended = MeshStrategy(
-                strategy_id="modal-mid-tet",
-                name="Modal — medium uniform TET4",
-                element_family="TET4",
-                global_size_m=max(char / 8.0, char * 0.06),
-                local_size_m=None,
-                refine_region_ids=(),
-                rationale="Mode shapes often tolerate mid uniform tet; refine if local mass/stiffness critical.",
-                confidence=0.45,
-            )
-            alternatives = (
-                MeshStrategy(
-                    strategy_id="modal-fine",
-                    name="Fine modal TET4",
-                    element_family="TET4",
-                    global_size_m=max(char / 14.0, char * 0.04),
-                    local_size_m=None,
-                    refine_region_ids=(),
-                    rationale="Higher mode fidelity at higher cost.",
-                    confidence=0.4,
-                ),
-            )
-        else:  # static_structural default
-            recommended = MeshStrategy(
-                strategy_id="static-balanced-tet",
-                name="Static structural — balanced TET4",
-                element_family="TET4",
-                global_size_m=max(char / 8.0, char * 0.06),
-                local_size_m=max(char / 18.0, char * 0.03) if refine else None,
-                refine_region_ids=refine,
-                rationale=(
-                    "Default linear static: moderate global size; "
-                    "local refine on selected high-stress / fillet / contact faces."
-                ),
-                confidence=0.55,
-            )
-            alternatives = (
-                MeshStrategy(
-                    strategy_id="static-coarse",
-                    name="Coarse static TET4",
-                    element_family="TET4",
-                    global_size_m=max(char / 4.0, char * 0.12),
-                    local_size_m=None,
-                    refine_region_ids=(),
-                    rationale="Fast preview mesh for layout checks only.",
-                    confidence=0.3,
-                ),
-                MeshStrategy(
-                    strategy_id="static-fine",
-                    name="Fine static TET4",
-                    element_family="TET4",
-                    global_size_m=max(char / 14.0, char * 0.035),
-                    local_size_m=max(char / 28.0, char * 0.02) if refine else None,
-                    refine_region_ids=refine,
-                    rationale="Finer mesh for stress peaks — still geometric only.",
-                    confidence=0.5,
-                ),
-            )
+        recommended = _plan_to_strategy(brief.primary_method, primary=True)
+        alternatives = tuple(
+            _plan_to_strategy(p, primary=False) for p in brief.alternate_methods
+        )
 
         if context.thin_wall_candidate:
             warnings.append(
                 "Thin-wall candidate flagged: shell/hybrid may be better than pure tet — "
-                "not auto-switched in M1 DEMO."
+                "not auto-switched in DEMO."
             )
-        if context.expects_contact and not refine:
-            warnings.append("Contact expected but no contact faces selected for local refine.")
 
         return StrategyProposal(
             recommended=recommended,
@@ -222,7 +97,6 @@ class MeshStrategyAdvisor:
         )
 
     def default_regions(self, geometry: GeometryModel) -> tuple[GeometryRegion, ...]:
-        """Session-local bbox faces for selection when CAD topology is unavailable."""
         mn = geometry.bbox_min
         mx = geometry.bbox_max
         faces = [
@@ -244,9 +118,21 @@ class MeshStrategyAdvisor:
             for rid, label, bmin, bmax in faces
         )
 
-    @staticmethod
-    def _characteristic_length(geometry: GeometryModel) -> float:
-        dx = geometry.bbox_max.x - geometry.bbox_min.x
-        dy = geometry.bbox_max.y - geometry.bbox_min.y
-        dz = geometry.bbox_max.z - geometry.bbox_min.z
-        return max(min(dx, dy, dz), 1e-6)
+
+def _plan_to_strategy(plan: MeshMethodPlan, *, primary: bool) -> MeshStrategy:
+    name = plan.method_id.replace("-", " ").title()
+    rationale = plan.notes
+    if plan.through_thickness_elements:
+        rationale += f" Through-thickness ~{plan.through_thickness_elements} elems."
+    if plan.elements_around_hole:
+        rationale += f" Around feature ~{plan.elements_around_hole} elems."
+    return MeshStrategy(
+        strategy_id=plan.method_id,
+        name=name,
+        element_family="TET4",
+        global_size_m=plan.global_size_m,
+        local_size_m=plan.local_size_m,
+        refine_region_ids=plan.refine_region_ids,
+        rationale=rationale,
+        confidence=0.6 if primary else 0.4,
+    )

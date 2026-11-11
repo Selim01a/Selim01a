@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from engcore.domain.analysis import AnalysisContext
-from engcore.geometry.synthetic import SyntheticGeometryImporter
 from engcore.domain.models import UnitPolicy
+from engcore.geometry.synthetic import SyntheticGeometryImporter
 from engcore.orchestration.pipeline import compare_strategies, propose_strategies
 from engcore.standards.mesh_advisor import MeshStrategyAdvisor
 
@@ -36,8 +36,6 @@ def test_static_recommendation_and_compare(tmp_path: Path) -> None:
     session = compare_strategies(geo, ctx, strategies, tmp_path / "cmp")
     assert len(session.variants) >= 2
     assert session.variants[0].n_cells > 0
-    # Different strategies should not all be identical cell counts necessarily,
-    # but reports must exist.
     assert all(v.report_path for v in session.variants)
 
 
@@ -49,4 +47,5 @@ def test_crash_warns_without_regions() -> None:
         expects_contact=True,
     )
     proposal = propose_strategies(geo, ctx, ())
-    assert any("critical regions" in w.lower() or "contact" in w.lower() for w in proposal.warnings)
+    joined = " ".join(proposal.warnings).lower()
+    assert "contact" in joined or "missing input" in joined

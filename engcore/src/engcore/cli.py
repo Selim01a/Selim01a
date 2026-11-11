@@ -5,12 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from engcore.domain.analysis import AnalysisContext
+from engcore.geometry.features import detect_feature_hints
+from engcore.geometry.regions import list_regions
 from engcore.orchestration.pipeline import (
     compare_strategies,
     import_geometry,
+    interpret_analysis_case,
     propose_strategies,
     run_pipeline,
 )
@@ -91,6 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(compare)
     compare.add_argument("--out", type=Path, required=True)
 
+    interpret = sub.add_parser(
+        "interpret", help="Interpret analysis case → mesh method brief (no mesh)"
+    )
+    add_common(interpret)
+
     return p
 
 
@@ -99,6 +108,48 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     path = _resolve_input(args)
     ctx = _context_from_args(args)
+    selected = tuple(r for r in (args.regions or "").split(",") if r)
+
+    if args.command == "interpret":
+        if ctx is None:
+            print("ERROR: --analysis is required for interpret", file=sys.stderr)
+            return 2
+        try:
+            geometry = import_geometry(
+                path, units=args.units, confirm_units=args.confirm_units, prefer_gmsh=args.gmsh
+            )
+            regions = list_regions(geometry)
+            hints = detect_feature_hints(geometry, tuple(r.region_id for r in regions))
+            brief = interpret_analysis_case(
+                geometry,
+                ctx,
+                regions=regions,
+                feature_hints=hints,
+                selected_regions=selected,
+            )
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(
+            json.dumps(
+                {
+                    "title": brief.title,
+                    "summary": brief.summary,
+                    "confidence": brief.confidence,
+                    "physics_drivers": list(brief.physics_drivers),
+                    "mesh_drivers": list(brief.mesh_drivers),
+                    "missing_inputs": list(brief.missing_inputs),
+                    "solver_notes": list(brief.solver_notes),
+                    "characteristic_length_m": brief.characteristic_length_m,
+                    "feature_length_m": brief.feature_length_m,
+                    "quality_targets": [asdict(t) for t in brief.quality_targets],
+                    "primary_method": asdict(brief.primary_method),
+                    "alternate_methods": [asdict(m) for m in brief.alternate_methods],
+                },
+                indent=2,
+            )
+        )
+        return 0
 
     if args.command == "run":
         try:
@@ -110,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_size_m=args.max_size,
                 prefer_gmsh=args.gmsh,
                 context=ctx,
-                selected_regions=tuple(r for r in (args.regions or "").split(",") if r),
+                selected_regions=selected,
             )
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -139,16 +190,32 @@ def main(argv: list[str] | None = None) -> int:
             geometry = import_geometry(
                 path, units=args.units, confirm_units=args.confirm_units, prefer_gmsh=args.gmsh
             )
-            regions = tuple(r for r in (args.regions or "").split(",") if r)
-            proposal = propose_strategies(geometry, ctx, regions)
+            regions = list_regions(geometry)
+            hints = detect_feature_hints(geometry, tuple(r.region_id for r in regions))
+            brief = interpret_analysis_case(
+                geometry,
+                ctx,
+                regions=regions,
+                feature_hints=hints,
+                selected_regions=selected,
+            )
+            proposal = propose_strategies(
+                geometry,
+                ctx,
+                selected,
+                feature_hints=hints,
+                regions=regions,
+                brief=brief,
+            )
             strategies = [proposal.recommended, *proposal.alternatives]
             session = compare_strategies(
                 geometry,
                 ctx,
                 strategies,
                 args.out,
-                selected_regions=list(regions),
+                selected_regions=list(selected),
                 prefer_gmsh=args.gmsh,
+                brief=brief,
             )
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -157,7 +224,13 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "geometry_id": session.geometry_id,
-                    "warnings": list(proposal.warnings),
+                    "case": {
+                        "title": brief.title,
+                        "summary": brief.summary,
+                        "confidence": brief.confidence,
+                        "primary_method": brief.primary_method.method_id,
+                    },
+                    "reviews": session.feature_warnings,
                     "variants": [
                         {
                             "strategy_id": v.strategy.strategy_id,

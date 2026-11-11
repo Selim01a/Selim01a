@@ -10,12 +10,21 @@ STEP alone cannot choose a correct mesh. The same cylinder needs different strat
 The software automates **the rest**: sizing proposals, local refine hints, tet generation, quality metrics, and side-by-side comparison.
 
 ## M1 user flow
-1. Load STEP/fixture → see geometry in 3D viewer (bbox/outline; mesh overlay after meshing)
+1. Load STEP/fixture → see geometry in 3D viewer (surface preview; mesh overlay after meshing)
 2. Set analysis context (required)
-3. Select regions (M1 demo: 6 bbox faces; later: real CAD faces via OCC)
-4. Get recommended strategy + alternatives with rationale/warnings
-5. Mesh one strategy **or** compare several and inspect node/cell/aspect/rule behaviour
-6. Export reports per variant
+3. Select regions (CAD faces / fixture faces / bbox fallback)
+4. **Interpret case** → physics drivers, missing inputs, feature length, method plan
+5. Get recommended strategy + alternatives from that method plan
+6. Mesh one strategy **or** compare several; review against DEMO quality targets
+7. Export reports per variant
+
+## Case interpretation (`engcore interpret`)
+Produces an `AnalysisCaseBrief`:
+- physics + mesh drivers
+- missing STEP-impossible inputs (BCs, material, …)
+- feature length (e.g. hole) → local size (~N elems across)
+- through-thickness element policy for thin solids
+- DEMO geometric quality targets + post-mesh review
 
 ## Automation map (first product)
 | Capability | M1 status |
